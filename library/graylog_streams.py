@@ -358,7 +358,8 @@ from ansible.module_utils.urls import fetch_url, to_text
 
 
 def create(module, base_url, headers, index_set_id):
-
+    #TODO: call query_stream from here to check for existing streams similar to create_rule func
+    # this will remove the need for Ansible playbook idempotency contortions
     url = base_url
 
     payload = {}
@@ -382,6 +383,18 @@ def create(module, base_url, headers, index_set_id):
     return info['status'], info['msg'], content, url
 
 def query_rules(module, base_url, headers):
+    '''
+    Check for rules in a given stream with matching field and value settings.
+    If they exist, return the rule ID, if not return rule_id="0"
+    :param module: Ansible module configuration settings
+    :type module: dict
+    :param base_url: Graylog API URL
+    :type base_url: string
+    :param headers: HTTP headers to be sent with API req
+    :type headers: dict
+    :return: HTTP status code and msg, response body, and API endpoint called
+    :rtype: tuple
+    '''
 
     url = "/".join([base_url, module.params['stream_id'], "rules"])
     #raise Exception(url)
@@ -390,8 +403,6 @@ def query_rules(module, base_url, headers):
     value = module.params['value']
     #raise Exception(module.params['field'])
 
-
-    #TODO: GET current rules, compare field and value to determine duplication
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
     if info['status'] != 200:
         module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
@@ -403,65 +414,61 @@ def query_rules(module, base_url, headers):
     except AttributeError:
         content = info.pop('body', '')
 
-    if rules is not None:
+    if rules['total'] != 0:
         i = 0
         while i < len(rules['stream_rules']):
             rule = rules['stream_rules'][i]
             if field == rule['field'] and value == rule['value']:
-                rule_json = {'rule_id': rule['id']}
-                #raise Exception(rule_json)
+                rule_exists = {'rule_exists': True}
+                #raise Exception(rule_exists)
                 break
             else:
-                rule_json = {'rule_id': '0'}
+                rule_exists = {'rule_exists': False}
             i += 1
     else:
-        raise Exception("No streams returned from Graylog API")
+        rule_exists = {'rule_exists': False}
 
-    return info['status'], info['msg'], json.dumps(rule_json), url
-
-    #for key in ['field', 'type', 'value', 'inverted', 'description']:
-    #    if module.params[key] is not None:
-    #        payload[key] = module.params[key]
-
-    #response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
-
-    #if info['status'] != 201:
-    #    module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
-
-    #try:
-    #    content = to_text(response.read(), errors='surrogate_or_strict')
-    #except AttributeError:
-    #    content = info.pop('body', '')
-
-    #return info['status'], info['msg'], content, url
+    content = json.dumps(rule_exists)
+    return info['status'], info['msg'], content, url
 
 def create_rule(module, base_url, headers):
+    """
+    Create a stream rule after checking for existing rules with same field and value settings
+    :param module: Ansible module configuration settings
+    :type module: dict
+    :param base_url: Graylog API URL
+    :type base_url: string
+    :param headers: HTTP headers to be sent with API req
+    :type headers: dict
+    :return: HTTP status code and msg, response body, and API endpoint called
+    :rtype: tuple
+    """
 
     status, message, content, url = query_rules(module, base_url, headers)
-    #raise Exception(f'{status} {message} {content}')
     query_result = json.loads(content)
-    #raise Exception(result['rule_id'])
-    if query_result['rule_id'] == "0":
-        url = "/".join([base_url, module.params['stream_id'], "rules"])
-        #raise Exception(url)
-        payload = {}
+    if "rule_exists" in query_result:
+        if not query_result['rule_exists']:
+            url = "/".join([base_url, module.params['stream_id'], "rules"])
+            payload = {}
 
-        for key in ['field', 'type', 'value', 'inverted', 'description']:
-            if module.params[key] is not None:
-                payload[key] = module.params[key]
+            for key in ['field', 'type', 'value', 'inverted', 'description']:
+                if module.params[key] is not None:
+                    payload[key] = module.params[key]
+           #TODO: the following 9 lines are duplicated 4x, turn into a helper function?
+            response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
 
-        response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
+            if info['status'] != 201:
+                module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
-        if info['status'] != 201:
-            module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+            try:
+                content = to_text(response.read(), errors='surrogate_or_strict')
+            except AttributeError:
+                content = info.pop('body', '')
+        else:
+            info = dict(url=url, status=200, msg="stream rule exists")
 
-        try:
-            content = to_text(response.read(), errors='surrogate_or_strict')
-        except AttributeError:
-            content = info.pop('body', '')
     else:
-        info = dict(url=url, status=200, msg="stream rule exists")
-
+        raise Exception("Key 'rule_exists' not present in 'query_result' dict.")
 
     return info['status'], info['msg'], content, url
 

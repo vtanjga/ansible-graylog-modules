@@ -1,0 +1,49 @@
+- hosts: localhost
+  gather_facts: no
+  become: true
+  vars:
+    graylog_fqdn: "localhost"
+    graylog_port: "9000"
+    graylog_user: "admin"
+    graylog_password: "admin"
+    graylog_streams:
+      - gelf
+      - syslog
+      - bal
+      - cloudwatch
+
+
+  tasks:
+    - name: Get stream id from stream name query
+      graylog_streams:
+        action: query_streams
+        allow_http: true
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        stream_name: "{{ item }}"
+      loop: "{{ graylog_streams }}"
+      register: streams
+
+    - name: "Print matching streams"
+      ansible.builtin.debug:
+        msg: "Stream Name: {{ item.invocation.module_args.stream_name }}, Stream ID: {{ item.json.stream_id }}"
+      with_items: "{{ streams.results }}"
+
+    - name: Create stream rule
+      graylog_streams:
+        action: create_rule
+        allow_http: true
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        #stream_id: "60ee1c5502b089596bffbb3b"
+        stream_id: "{{ item.json.stream_id }}"
+        description: "dev logs"
+        field: "log_env2"
+        type: "1"
+        value: "stage"
+        inverted: False
+      loop: "{{ streams.results }}"
