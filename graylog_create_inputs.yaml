@@ -15,19 +15,22 @@
 
 
   tasks:
-    - name: Display all inputs
-      graylog_input:
-        action: "list"
-        allow_http: true
+    - name: Create GELF HTTP input
+      graylog_input_gelf:
+        action: "create"
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
+        allow_http: true
         validate_certs: "false"
-      #loop: "{{ graylog_inputs }}"
-      register: input_list
+        input_type: "HTTP"
+        title: "Test2 input GELF HTTP"
+        global_input: "true"
+        bind_address: "0.0.0.0"
+        port: 1514
 
 
-    - name: Print inputs
-      ansible.builtin.debug:
-        msg: "{{ input_list }}"
+ #   - name: Print inputs
+ #     ansible.builtin.debug:
+ #       msg: "{{ input_list }}"
