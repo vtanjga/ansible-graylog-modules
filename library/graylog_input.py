@@ -87,6 +87,7 @@ import json
 import base64
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
+#from module_utils.graylog_get_api_token import get_token
 
 def delete(module, base_url, headers):
 
@@ -194,7 +195,7 @@ def main():
 
     try:
         js = json.loads(content)
-        raise Exception(js)
+        #raise Exception(js)
     except ValueError:
         js = ""
 

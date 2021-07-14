@@ -207,7 +207,7 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import re
 
-def search_by_name(module, base_url, headers, title):
+def query_inputs(module, base_url, headers, title):
 
     url = base_url
     inputExist = False
@@ -232,13 +232,25 @@ def search_by_name(module, base_url, headers, title):
     return inputExist
 
 
-def action(module, base_url, headers):
+def create_input(module, base_url, headers):
+    """
+     Check if an input with same title exists, if so update/PUT it, if not create/POST it.
+    :param module: Ansible playbook parameters
+    :type module: str
+    :param base_url: Graylog API URL
+    :type base_url: str
+    :param headers: HTTP Headers to be sent to Graylog API
+    :type headers: dict
+    :return: HTTP Response Code, message, response body, and API URL
+    :rtype: tuple
+    """
 
     url = base_url
 
     if module.params['action'] == "create":
-      inputExist = search_by_name(module, base_url, headers, module.params['title'])
+      inputExist = query_inputs(module, base_url, headers, module.params['title'])
       if inputExist == True:
+        #TODO: use this exit_json in streams module also!
         module.exit_json(changed=False)
       httpMethod = "POST"
     else:
@@ -246,6 +258,7 @@ def action(module, base_url, headers):
       url = base_url + "/" + module.params['input_id']
 
     configuration = {}
+   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
     for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
                  'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
                  'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
@@ -304,7 +317,8 @@ def get_token(module, endpoint, username, password, allow_http):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            endpoint=dict(type='str'),
+            graylog_fqdn=dict(type='str'),
+            graylog_port=dict(type='str'),
             graylog_user=dict(type='str'),
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
@@ -338,15 +352,16 @@ def main():
         )
     )
 
-    endpoint = module.params['endpoint']
+    graylog_fqdn = module.params['graylog_fqdn']
+    graylog_port = module.params['graylog_port']
     graylog_user = module.params['graylog_user']
     graylog_password = module.params['graylog_password']
     allow_http = module.params['allow_http']
 
     if allow_http == True:
-      endpoint = "http://" + endpoint
+      endpoint = "http://" + graylog_fqdn + ":" + graylog_port
     else:
-      endpoint = "https://" + endpoint
+      endpoint = "https://" + graylog_fqdn + ":" + graylog_port
 
     # Build full name of input type
     if module.params['input_type'] == "TCP":
@@ -359,10 +374,13 @@ def main():
     base_url = endpoint + "/api/system/inputs"
 
     api_token = get_token(module, endpoint, graylog_user, graylog_password, allow_http)
-    headers = '{ "Content-Type": "application/json", "X-Requested-By": "Graylog API", "Accept": "application/json", \
-                "Authorization": "Basic ' + api_token.decode() + '" }'
+    headers = '{ "Content-Type": "application/json", \
+                 "X-Requested-By": "Graylog API", \
+                 "Accept": "application/json", \
+                 "Authorization": "Basic ' + api_token.decode() + '" }'
 
-    status, message, content, url = action(module, base_url, headers)
+    # create the input if one with same title does not exist
+    status, message, content, url = create_input(module, base_url, headers)
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')
