@@ -15,9 +15,14 @@ description:
 version_added: "2.9"
 author: "Matthieu SIMON"
 options:
-  endpoint:
+  graylog_fqdn:
     description:
-      - Graylog endoint. (i.e. graylog.mydomain.com).
+      - Graylog DNS fqdn. (i.e. graylog.mydomain.com).
+    required: false
+    type: str    
+  graylog_port:
+    description:
+      - Graylog API port. (i.e. 9000).
     required: false
     type: str
   graylog_user:
@@ -110,6 +115,7 @@ def list(module, base_url, headers):
 
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
+        #raise Exception(content)
     except AttributeError:
         content = info.pop('body', '')
 
@@ -146,7 +152,8 @@ def get_token(module, endpoint, username, password, allow_http):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            endpoint=dict(type='str'),
+            graylog_fqdn=dict(type='str'),
+            graylog_port=dict(type='str'),
             graylog_user=dict(type='str'),
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
@@ -157,22 +164,25 @@ def main():
         )
     )
 
-    endpoint = module.params['endpoint']
+    graylog_fqdn = module.params['graylog_fqdn']
+    graylog_port = module.params['graylog_port']
     graylog_user = module.params['graylog_user']
     graylog_password = module.params['graylog_password']
     action = module.params['action']
     allow_http = module.params['allow_http']
 
     if allow_http == True:
-      endpoint = "http://" + endpoint
+      endpoint = "http://" + graylog_fqdn + ":" + graylog_port
     else:
-      endpoint = "https://" + endpoint
+      endpoint = "https://" + graylog_fqdn + ":" + graylog_port
 
     base_url = endpoint + "/api/system/inputs"
 
     api_token = get_token(module, endpoint, graylog_user, graylog_password, allow_http)
-    headers = '{ "Content-Type": "application/json", "X-Requested-By": "Graylog API", "Accept": "application/json", \
-                "Authorization": "Basic ' + api_token.decode() + '" }'
+    headers = '{ "Content-Type": "application/json", \
+                 "X-Requested-By": "Graylog API", \
+                 "Accept": "application/json", \
+                 "Authorization": "Basic ' + api_token.decode() + '" }'
 
     if action == "list":
         status, message, content, url = list(module, base_url, headers)                
@@ -184,6 +194,7 @@ def main():
 
     try:
         js = json.loads(content)
+        raise Exception(js)
     except ValueError:
         js = ""
 
