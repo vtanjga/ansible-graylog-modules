@@ -1,0 +1,25 @@
+- hosts: localhost
+  gather_facts: no
+  become: true
+  vars:
+    graylog_fqdn: "localhost"
+    graylog_port: "9000"
+    graylog_user: "admin"
+    graylog_password: "admin"
+    graylog_streams:
+      - gelf
+      - syslog
+      - bal
+      - cloudwatch
+
+
+  tasks:
+    - name: Display all inputs
+      graylog_input:
+        allow_http: true
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        validate_certs: "false"
+        action: "list"
