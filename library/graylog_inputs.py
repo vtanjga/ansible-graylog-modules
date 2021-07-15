@@ -198,20 +198,39 @@ options:
 '''
 
 EXAMPLES = '''
-    - name: Create GELF HTTP input
-      graylog_inputs:
-        action: "create"
-        allow_http: "true"
-        graylog_fqdn: "{{ graylog_fqdn }}"
-        graylog_port: "{{ graylog_port }}"
-        graylog_user: "{{ graylog_user }}"
-        graylog_password: "{{ graylog_password }}"
-        title: "Test input GELF HTTP"
-        log_format: "GELF"
-        input_protocol: "HTTP"
-        bind_address: "0.0.0.0"
-        validate_certs: "false"
-        global_input: "true"
+
+  - name: Display all inputs
+    graylog_input:
+      endpoint: "{{ graylog_endpoint }}"
+      graylog_user: "{{ graylog_user }}"
+      graylog_password: "{{ graylog_password }}"
+      allow_http: "true"
+      validate_certs: "false"
+      action: "list"
+
+  - name: Remove input with ID 1df0f1234abcd0000d0adf20
+    graylog_input:
+      endpoint: "{{ graylog_endpoint }}"
+      graylog_user: "{{ graylog_user }}"
+      graylog_password: "{{ graylog_password }}"
+      allow_http: "true"
+      validate_certs: "false"
+      action: "delete"        
+      input_id: "1df0f1234abcd0000d0adf20"  
+  - name: Create GELF HTTP input
+    graylog_inputs:
+      action: "create"
+      allow_http: "true"
+      graylog_fqdn: "{{ graylog_fqdn }}"
+      graylog_port: "{{ graylog_port }}"
+      graylog_user: "{{ graylog_user }}"
+      graylog_password: "{{ graylog_password }}"
+      title: "Test input GELF HTTP"
+      log_format: "GELF"
+      input_protocol: "HTTP"
+      bind_address: "0.0.0.0"
+      validate_certs: "false"
+      global_input: "true"
 
   # this is from the rsyslog file, POST/PUT are combined in this version
   - name: Update existing input
@@ -241,6 +260,25 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import re
 
+def list(module, base_url, headers):
+
+    url = base_url
+
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
+
+    if info['status'] != 200:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+        #raise Exception(content)
+    except AttributeError:
+        content = info.pop('body', '')
+
+    return info['status'], info['msg'], content, url
+
+
+
 def query_inputs(module, base_url, headers, title):
 
     url = base_url
@@ -259,6 +297,7 @@ def query_inputs(module, base_url, headers, title):
 
     regex = r"^" + re.escape(title) + r"$"
 
+    #TODO: match on more than just title, add port, log_format, input_protocol
     for graylogInputs in data['inputs']:
       if re.match(regex, graylogInputs['title']) is not None:
         inputExist = True
@@ -295,7 +334,9 @@ def create_input(module, base_url, headers):
 
     configuration = {}
 
-    # Build full name of input type
+
+   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
+    # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
     if log_format == "GELF":
         if module.params['input_protocol'] == "TCP":
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
@@ -303,16 +344,6 @@ def create_input(module, base_url, headers):
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
         else:
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
-    elif log_format == "Syslog":
-        #TODO: from syslog input, need to incorporate into above
-        if module.params['input_protocol'] == "UDP":
-            module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
-        else:
-            module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
-
-   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
-    # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
-    if log_format == "GELF":
         for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
                  'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
                  'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
@@ -324,8 +355,16 @@ def create_input(module, base_url, headers):
                  'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
                  'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
                  'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter' ]:
+            if module.params['input_protocol'] == "UDP":
+                module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
+            else:
+                module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
             if module.params[key] is not None:
                 configuration[key] = module.params[key]
+    elif log_format == "Cloudtrail":
+        raise Exception("Cloudtrail input not implemented yet :(")
+    elif log_format == "Cloudwatch":
+        raise Exception("Cloudwatch input not implemented yet :(")
 
     payload = {}
 
@@ -347,7 +386,25 @@ def create_input(module, base_url, headers):
 
     return info['status'], info['msg'], content, base_url
 
-def get_token(module, endpoint, username, password, allow_http):
+
+def delete(module, base_url, headers):
+
+    url = base_url + "/" + module.params['input_id']
+
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
+
+    if info['status'] != 204:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+    except AttributeError:
+        content = info.pop('body', '')
+
+    return info['status'], info['msg'], content, url
+
+
+def get_token(module, endpoint, username, password):
 
     headers = '{ "Content-Type": "application/json", "X-Requested-By": "Graylog API", "Accept": "application/json" }'
 
@@ -375,6 +432,8 @@ def get_token(module, endpoint, username, password, allow_http):
 
     return session_token
 
+
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -384,8 +443,8 @@ def main():
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
             allow_http=dict(type='bool', required=False, default=False),
-            action=dict(type='str', required=False, default='create',
-                        choices=[ 'create', 'update' ]),
+            action=dict(type='str', required=True, default='list',
+                        choices=[ 'create', 'update', 'list', 'delete']),
             force=dict(type='bool', required=False, default=False),
             log_format=dict(type='str', required=True,
                                 choices=['GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch']),
@@ -426,13 +485,6 @@ def main():
     graylog_user = module.params['graylog_user']
     graylog_password = module.params['graylog_password']
     allow_http = module.params['allow_http']
-    global_input = module.params['global_input']
-    #log_format = module.params['log_format']
-    input_protocol = module.params['input_protocol']
-    port = module.params['port']
-
-    #TODO: conditional setting port default based on protocol?
-
 
     if allow_http == True:
       endpoint = "http://" + graylog_fqdn + ":" + graylog_port
