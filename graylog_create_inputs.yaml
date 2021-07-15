@@ -16,54 +16,57 @@
 
   tasks:
     - name: Create GELF HTTP input
-      graylog_input_gelf:
+      graylog_inputs:
         action: "create"
+        allow_http: true
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
-        allow_http: true
+        log_format: "GELF"
+        input_protocol: "TCP"
         validate_certs: "false"
-        input_type: "HTTP"
         title: "Test2 input GELF HTTP"
         global_input: "true"
         bind_address: "0.0.0.0"
         port: 1514
 
     - name: Create GELF UDP input
-      graylog_input_gelf:
+      graylog_inputs:
         action: "create"
-        graylog_fqdn: "{{ graylog_fqdn }}"
-        graylog_port: "{{ graylog_port }}"
-        graylog_user: "{{ graylog_user }}"
-        graylog_password: "{{ graylog_password }}"
         allow_http: true
-        input_type: "UDP"
-        title: "Test2 input GELF HTTP"
-        global_input: "true"
-        bind_address: "0.0.0.0"
-        port: 1514
-
-    - name: Create Rsyslog TCP input
-      graylog_input_rsyslog:
-        action: "create"
-        allow_http: "true"
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
+        log_format: "GELF"
+        input_protocol: "UDP"
+        title: "Test2 GELF UDP"
         global_input: "true"
-        title: "Rsyslog TCP"
-        input_type: "TCP"
         bind_address: "0.0.0.0"
-        port: "514"
-        #validate_certs: "false"
-        #allow_override_date: "true"
-        #expand_structured_data: "false"
-        #force_rdns: "false"
-        #number_worker_threads: "2"
-        #recv_buffer_size: "1048576"
-        #store_full_message: "true"
+        port: 12201
+
+#    - name: Create Rsyslog TCP input
+#      graylog_inputs:
+#        action: "create"
+#        allow_http: "true"
+#        graylog_fqdn: "{{ graylog_fqdn }}"
+#        graylog_port: "{{ graylog_port }}"
+#        graylog_user: "{{ graylog_user }}"
+#        graylog_password: "{{ graylog_password }}"
+#        global_input: "true"
+#        title: "Rsyslog TCP"
+#        bind_address: "0.0.0.0"
+#        port: "514"
+#        log_format: "Syslog"
+#        input_protocol: "UDP"
+#        #validate_certs: "false"
+#        #allow_override_date: "true"
+#        #expand_structured_data: "false"
+#        #force_rdns: "false"
+#        #number_worker_threads: "2"
+#        #recv_buffer_size: "1048576"
+#        #store_full_message: "true"
 
  #   - name: Print inputs
  #     ansible.builtin.debug:

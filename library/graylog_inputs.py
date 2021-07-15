@@ -55,7 +55,6 @@ options:
     description:
       - Log event format or source (not all are implemented at this time)
     required: true
-    default: GELF
     choices: [ 'GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch' ]
     type: str  
   input_protocol:
@@ -282,6 +281,8 @@ def create_input(module, base_url, headers):
 
     url = base_url
 
+    log_format = module.params['log_format']
+
     if module.params['action'] == "create":
       inputExist = query_inputs(module, base_url, headers, module.params['title'])
       if inputExist == True:
@@ -293,16 +294,32 @@ def create_input(module, base_url, headers):
       url = base_url + "/" + module.params['input_id']
 
     configuration = {}
+
+    # Build full name of input type
+    if log_format == "GELF":
+        if module.params['input_protocol'] == "TCP":
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
+        elif module.params['input_protocol'] == "UDP":
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
+        else:
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
+    elif log_format == "Syslog":
+        #TODO: from syslog input, need to incorporate into above
+        if module.params['input_protocol'] == "UDP":
+            module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
+        else:
+            module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
+
    #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
     # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
-    if input_type == "gelf":
+    if log_format == "GELF":
         for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
                  'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
                  'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
                  'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size' ]:
             if module.params[key] is not None:
                 configuration[key] = module.params[key]
-    elif input_type == "syslog":
+    elif log_format == "Syslog":
         for key in [ 'bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
                  'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
                  'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
@@ -370,9 +387,9 @@ def main():
             action=dict(type='str', required=False, default='create',
                         choices=[ 'create', 'update' ]),
             force=dict(type='bool', required=False, default=False),
-            log_format=dict(type='str', required=True, default='UDP',
+            log_format=dict(type='str', required=True,
                                 choices=['GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch']),
-            input_protocol=dict(type='str', required=True, default='UDP',
+            input_protocol=dict(type='str', required=True,
                         choices=[ 'UDP', 'TCP', 'HTTP' ]),
             title=dict(type='str', required=True ),
             input_id=dict(type='str', required=False),
@@ -409,26 +426,20 @@ def main():
     graylog_user = module.params['graylog_user']
     graylog_password = module.params['graylog_password']
     allow_http = module.params['allow_http']
+    global_input = module.params['global_input']
+    #log_format = module.params['log_format']
+    input_protocol = module.params['input_protocol']
+    port = module.params['port']
+
+    #TODO: conditional setting port default based on protocol?
+
 
     if allow_http == True:
       endpoint = "http://" + graylog_fqdn + ":" + graylog_port
     else:
       endpoint = "https://" + graylog_fqdn + ":" + graylog_port
 
-    # Build full name of input type
-    if log_format == "GELF":
-        if module.params['input_protocol'] == "TCP":
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
-        elif module.params['input_protocol'] == "UDP":
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
-        else:
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
-    elif log_format == "Syslog":
-        #TODO: from syslog input, need to incorporate into above
-        if module.params['input_protocol'] == "UDP":
-            module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
-        else:
-            module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
+
 
     base_url = endpoint + "/api/system/inputs"
 
