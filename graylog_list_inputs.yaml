@@ -16,7 +16,7 @@
 
   tasks:
     - name: Display all inputs
-      graylog_input:
+      graylog_inputs:
         action: "list"
         allow_http: true
         graylog_fqdn: "{{ graylog_fqdn }}"
@@ -24,6 +24,9 @@
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
         validate_certs: "false"
+        log_format: "GELF"
+        input_protocol: "TCP"
+        title: "Test2 input GELF HTTP"
       #loop: "{{ graylog_inputs }}"
       register: input_list
 
