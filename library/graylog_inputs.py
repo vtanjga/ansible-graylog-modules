@@ -387,6 +387,7 @@ def create_input(module, base_url, headers):
     return info['status'], info['msg'], content, base_url
 
 
+
 def delete(module, base_url, headers):
 
     url = base_url + "/" + module.params['input_id']
@@ -443,7 +444,7 @@ def main():
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
             allow_http=dict(type='bool', required=False, default=False),
-            action=dict(type='str', required=True, default='list',
+            action=dict(type='str', default='list',
                         choices=[ 'create', 'update', 'list', 'delete']),
             force=dict(type='bool', required=False, default=False),
             log_format=dict(type='str', required=True,
@@ -480,6 +481,7 @@ def main():
         )
     )
 
+    action = module.params['action']
     graylog_fqdn = module.params['graylog_fqdn']
     graylog_port = module.params['graylog_port']
     graylog_user = module.params['graylog_user']
@@ -495,14 +497,21 @@ def main():
 
     base_url = endpoint + "/api/system/inputs"
 
-    api_token = get_token(module, endpoint, graylog_user, graylog_password, allow_http)
+    api_token = get_token(module, endpoint, graylog_user, graylog_password)
     headers = '{ "Content-Type": "application/json", \
                  "X-Requested-By": "Graylog API", \
                  "Accept": "application/json", \
                  "Authorization": "Basic ' + api_token.decode() + '" }'
 
-    # create the input if one with same title does not exist
-    status, message, content, url = create_input(module, base_url, headers)
+    if action == "list":
+       # if index_set_id is None:
+       #     index_set_id = default_index_set(module, endpoint, headers)
+        status, message, content, url = list(module, base_url, headers)
+    elif action == "create":
+        # create the input if one with same title does not exist
+        status, message, content, url = create_input(module, base_url, headers)
+    elif action == "delete":
+        status, message, content, url = create_input(module, base_url, headers)
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')
