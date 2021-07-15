@@ -30,7 +30,22 @@
       #loop: "{{ graylog_inputs }}"
       register: input_list
 
-
     - name: Print inputs
       ansible.builtin.debug:
         msg: "{{ input_list }}"
+
+    - name: Display all extractors for input
+      graylog_inputs:
+        action: "list_extractors"
+        allow_http: true
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        input_id: "60f096d3062742757d8958c0"
+        validate_certs: "false"
+        log_format: "GELF"
+        input_protocol: "TCP"
+        title: "Test2 input GELF HTTP"
+      #loop: "{{ graylog_inputs }}"
+      register: input_list

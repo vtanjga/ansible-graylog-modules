@@ -386,7 +386,21 @@ def create_input(module, base_url, headers):
 
     return info['status'], info['msg'], content, base_url
 
+def list_extractors(module, base_url, headers):
+    # http://127.0.0.1:9000/api/system/inputs/60f096d3062742757d8958c0/extractors
 
+    url = base_url + "/" + module.params['input_id'] + "/extractors"
+
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
+
+    if info['status'] != 200:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+    except AttributeError:
+        content = info.pop('body', '')
+
+    return info['status'], info['msg'], content, url
 
 def delete(module, base_url, headers):
 
@@ -438,14 +452,15 @@ def get_token(module, endpoint, username, password):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
+            action=dict(type='str', default='list',
+                        choices=['create', 'update', 'list', 'list_extractors', 'delete']),
             graylog_fqdn=dict(type='str'),
             graylog_port=dict(type='str'),
             graylog_user=dict(type='str'),
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
             allow_http=dict(type='bool', required=False, default=False),
-            action=dict(type='str', default='list',
-                        choices=[ 'create', 'update', 'list', 'delete']),
+
             force=dict(type='bool', required=False, default=False),
             log_format=dict(type='str', required=True,
                                 choices=['GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch']),
@@ -510,6 +525,8 @@ def main():
     elif action == "create":
         # create the input if one with same title does not exist
         status, message, content, url = create_input(module, base_url, headers)
+    elif action == "list_extractors":
+        status, message, content, url = list_extractors(module, base_url, headers)
     elif action == "delete":
         status, message, content, url = create_input(module, base_url, headers)
 
