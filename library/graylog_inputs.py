@@ -334,8 +334,6 @@ def create_input(module, base_url, headers):
 
     configuration = {}
 
-
-   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
     # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
     if log_format == "GELF":
         if module.params['input_protocol'] == "TCP":
@@ -362,9 +360,9 @@ def create_input(module, base_url, headers):
             if module.params[key] is not None:
                 configuration[key] = module.params[key]
     elif log_format == "Cloudtrail":
-        raise Exception("Cloudtrail input not implemented yet :(")
+        raise IOError("Cloudtrail input not implemented yet :(")
     elif log_format == "Cloudwatch":
-        raise Exception("Cloudwatch input not implemented yet :(")
+        raise IOError("Cloudwatch input not implemented yet :(")
 
     payload = {}
 
@@ -401,6 +399,9 @@ def list_extractors(module, base_url, headers):
         content = info.pop('body', '')
 
     return info['status'], info['msg'], content, url
+
+#TODO: define create_extractors func, not sure how to handle json files, templates or build with dicts, or ?
+
 
 def delete(module, base_url, headers):
 
