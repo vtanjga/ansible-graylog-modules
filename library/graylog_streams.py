@@ -399,6 +399,7 @@ def query_rules(module, base_url, headers):
     url = "/".join([base_url, module.params['stream_id'], "rules"])
     #raise Exception(url)
     payload = {}
+
     field = module.params['field']
     value = module.params['value']
     #raise Exception(module.params['field'])
@@ -410,23 +411,15 @@ def query_rules(module, base_url, headers):
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
         rules = json.loads(content)
-        #raise Exception(rules)
-    except AttributeError:
-        content = info.pop('body', '')
+    except IOError:
+        raise IOError("Server response not readable")
 
-    if rules['total'] != 0:
-        i = 0
-        while i < len(rules['stream_rules']):
-            rule = rules['stream_rules'][i]
-            if field == rule['field'] and value == rule['value']:
-                rule_exists = {'rule_exists': True}
-                #raise Exception(rule_exists)
-                break
-            else:
-                rule_exists = {'rule_exists': False}
-            i += 1
-    else:
-        rule_exists = {'rule_exists': False}
+    for rule in rules['stream_rules']:
+        if field == rule['field'] and value == rule['value']:
+            rule_exists = dict(rule_exists=True)
+            break
+        else:
+            rule_exists = dict(rule_exists=False)
 
     content = json.dumps(rule_exists)
     return info['status'], info['msg'], content, url
@@ -680,23 +673,19 @@ def query_streams(module, base_url, headers, stream_name):
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
         streams = json.loads(content)
-    except AttributeError:
-        content = info.pop('body', '')
+    except IOError:
+        raise IOError("Server response not readable")
 
     if streams is not None:
-        i = 0
-        while i < len(streams['streams']):
-            stream = streams['streams'][i]
+        for stream in streams['streams']:
             if stream_name == stream['title']:
                 stream_json = {'stream_id': stream['id']}
                 break
             else:
                 stream_json = {'stream_id': '0'}
-            i += 1
-    else:
-        raise Exception("No streams returned from Graylog API")
 
-    return info['status'], info['msg'], json.dumps(stream_json), url
+    content = json.dumps(stream_json)
+    return info['status'], info['msg'], content, url
 
 
 def default_index_set(module, endpoint, headers):

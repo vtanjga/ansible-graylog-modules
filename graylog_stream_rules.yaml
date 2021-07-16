@@ -41,9 +41,9 @@
         graylog_password: "{{ graylog_password }}"
         #stream_id: "60ee1c5502b089596bffbb3b"
         stream_id: "{{ item.json.stream_id }}"
-        description: "dev logs"
-        field: "log_env2"
+        description: "logs"
+        field: "log_env3"
         type: "1"
-        value: "stage"
+        value: "dev"
         inverted: False
       loop: "{{ streams.results }}"
