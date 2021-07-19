@@ -579,9 +579,20 @@ def update_rule(module, streams_url, headers, stream_id, rule_id, field, type, v
     return info['status'], info['msg'], content, url
 
 
-def delete(module, streams_url, headers, stream_id):
+def delete_stream(module, streams_url, headers):
+   """
+   Delete graylog stream by stream_id
+    :param module: Ansible module configuration settings
+    :type module: dict
+    :param streams_url: Graylog streams API URL
+    :type streams_url: string
+    :param headers: HTTP headers to be sent with API req
+    :type headers: dict
+    :return: HTTP status code and msg, response body, and API endpoint called
+    :rtype: tuple
+   """
 
-    url = "/".join([streams_url, stream_id])
+    url = urljoin(streams_url, module.params['stream_id'])
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
 
@@ -757,7 +768,7 @@ def main():
             allow_http=dict(type='bool', required=False, default=False),
             validate_certs=dict(type='bool', required=False, default=True),
             action=dict(type='str', required=False, default='list', choices=['create', 'create_rule', 'start', 'pause',
-                        'update', 'update_rule', 'delete', 'delete_rule', 'list', 'query_streams', 'query_rules']),
+                        'update', 'update_rule', 'delete_stream', 'delete_rule', 'list', 'query_streams', 'query_rules']),
             stream_id=dict(type='str'),
             stream_name=dict(type='str'),
             rule_id=dict(type='str'),
@@ -815,8 +826,8 @@ def main():
         status, message, content, url = update(module, streams_url, headers, stream_id, title, description, remove_matches_from_default_stream, matching_type, rules, index_set_id)
     elif action == "update_rule":
         status, message, content, url = update_rule(module, streams_url, headers, stream_id, rule_id, field, type, value, inverted, description)
-    elif action == "delete":
-        status, message, content, url = delete(module, streams_url, headers)
+    elif action == "delete_stream":
+        status, message, content, url = delete_stream(module, streams_url, headers)
     elif action == "delete_rule":
         status, message, content, url = delete_rule(module, streams_url, headers)
     elif action == "start":

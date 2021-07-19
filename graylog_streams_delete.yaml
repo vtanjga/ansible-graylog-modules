@@ -27,23 +27,19 @@
       loop: "{{ graylog_streams }}"
       register: streams
 
+
     - name: "Print matching streams"
       ansible.builtin.debug:
         msg: "Stream Name: {{ item.invocation.module_args.stream_name }}, Stream ID: {{ item.json.stream_id }}"
       with_items: "{{ streams.results }}"
 
-
-    - name: Delete all matching stream rules
+    - name: Delete all streams
       graylog_streams:
-        action: delete_rule
+        action: delete_stream
         protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
         stream_id: "{{ item.json.stream_id }}"
-        field: "log_env1"
-        value: "dev"
-        #rule_id: "{{ rule.json.streamrule_id }}"
-      loop: "{{ streams.results }}"
-
+      with_items: "{{ streams.results }}"
