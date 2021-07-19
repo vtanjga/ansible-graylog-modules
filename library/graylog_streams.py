@@ -54,7 +54,7 @@ options:
       - Action to take against stream API.
     required: false
     default: list
-    choices: [ create, create_rule, start, pause, update, update_rule, delete, delete_rule, list, query_streams ]
+    choices: [ create_stream, create_rule, start_stream, pause_stream, update_stream, update_rule, delete_stream, delete_rule, list_streams, query_streams ]
     type: str
   title:
     description:
@@ -192,7 +192,7 @@ EXAMPLES = '''
 
 # Start stream
 - graylog_streams:
-    action: start
+    action: start_stream
     graylog_fqdn: "graylog.mydomain.com"
     graylog_port: "9000"
     graylog_user: "username"
@@ -201,7 +201,7 @@ EXAMPLES = '''
 
 # Pause stream
 - graylog_streams:
-    action: pause
+    action: pause_stream
     graylog_fqdn: "graylog.mydomain.com"
     graylog_port: "9000"
     graylog_user: "username"
@@ -384,7 +384,7 @@ def create(module, streams_url, headers, index_set_id):
     return info['status'], info['msg'], content, url
 
 def query_rules(module, streams_url, headers):
-    '''
+    """
     Check for rules in a given stream with matching field and value settings.
     If they exist, return the rule ID, if not return rule_id="0"
     :param module: Ansible module configuration settings
@@ -395,7 +395,7 @@ def query_rules(module, streams_url, headers):
     :type headers: dict
     :return: HTTP status code and msg, response body, and API endpoint called
     :rtype: tuple
-    '''
+    """
     rules_path = "/".join([module.params['stream_id'], "rules"])
     url = urljoin(streams_url, rules_path)
     payload = {}
@@ -580,8 +580,8 @@ def update_rule(module, streams_url, headers, stream_id, rule_id, field, type, v
 
 
 def delete_stream(module, streams_url, headers):
-   """
-   Delete graylog stream by stream_id
+    """
+    Delete graylog stream by stream_id
     :param module: Ansible module configuration settings
     :type module: dict
     :param streams_url: Graylog streams API URL
@@ -590,10 +590,9 @@ def delete_stream(module, streams_url, headers):
     :type headers: dict
     :return: HTTP status code and msg, response body, and API endpoint called
     :rtype: tuple
-   """
+    """
 
     url = urljoin(streams_url, module.params['stream_id'])
-
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
 
     if info['status'] != 204:
@@ -608,7 +607,17 @@ def delete_stream(module, streams_url, headers):
 
 
 def delete_rule(module, streams_url, headers):
-
+    """
+     Delete graylog stream rule with matching field and value settings by rule_id
+     :param module: Ansible module configuration settings
+     :type module: dict
+     :param streams_url: Graylog streams API URL
+     :type streams_url: string
+     :param headers: HTTP headers to be sent with API req
+     :type headers: dict
+     :return: HTTP status code and msg, response body, and API endpoint called
+     :rtype: tuple
+    """
     status, message, content, url = query_rules(module, streams_url, headers)
     query_result = json.loads(content)
     rules_path = "/".join([module.params['stream_id'], "rules", query_result['rule_id']])
@@ -627,13 +636,15 @@ def delete_rule(module, streams_url, headers):
     return info['status'], info['msg'], content, url
 
 
-def start(module, streams_url, headers, stream_id):
+def start_stream(module, streams_url, headers):
 
-    url = "/".join([streams_url, stream_id, "resume"])
+    path = "/".join([module.params['stream_id'], 'resume'])
+    url = urljoin(streams_url, path)
+    #raise Exception(url)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST')
 
-    if info['status'] != 200:
+    if info['status'] != 204:
         module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
     try:
@@ -644,13 +655,15 @@ def start(module, streams_url, headers, stream_id):
     return info['status'], info['msg'], content, url
 
 
-def pause(module, streams_url, headers, stream_id):
+def pause_stream(module, streams_url, headers):
 
-    url = "/".join([streams_url, stream_id, "pause"])
+    path = "/".join([module.params['stream_id'], 'pause'])
+    url = urljoin(streams_url, path)
+    #raise Exception(url)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST')
 
-    if info['status'] != 200:
+    if info['status'] != 204:
         module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
     try:
@@ -767,8 +780,8 @@ def main():
             graylog_password=dict(type='str', no_log=True),
             allow_http=dict(type='bool', required=False, default=False),
             validate_certs=dict(type='bool', required=False, default=True),
-            action=dict(type='str', required=False, default='list', choices=['create', 'create_rule', 'start', 'pause',
-                        'update', 'update_rule', 'delete_stream', 'delete_rule', 'list', 'query_streams', 'query_rules']),
+            action=dict(type='str', required=False, default='list', choices=['create', 'create_rule', 'start_stream', 'pause_stream',
+                        'update_stream', 'update_rule', 'delete_stream', 'delete_rule', 'list', 'query_streams', 'query_rules']),
             stream_id=dict(type='str'),
             stream_name=dict(type='str'),
             rule_id=dict(type='str'),
@@ -830,10 +843,10 @@ def main():
         status, message, content, url = delete_stream(module, streams_url, headers)
     elif action == "delete_rule":
         status, message, content, url = delete_rule(module, streams_url, headers)
-    elif action == "start":
-        status, message, content, url = start(module, streams_url, headers, stream_id)
-    elif action == "pause":
-        status, message, content, url = pause(module, streams_url, headers, stream_id)
+    elif action == "start_stream":
+        status, message, content, url = start_stream(module, streams_url, headers)
+    elif action == "pause_stream":
+        status, message, content, url = pause_stream(module, streams_url, headers)
     elif action == "list":
         status, message, content, url = list(module, streams_url, headers, stream_id)
     elif action == "query_streams":

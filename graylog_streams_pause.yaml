@@ -14,16 +14,6 @@
 
 
   tasks:
-    - name: List streams
-      graylog_streams:
-        action: list
-        allow_http: true
-        protocol: http
-        graylog_fqdn: "{{ graylog_fqdn }}"
-        graylog_port: "{{ graylog_port }}"
-        graylog_user: "{{ graylog_user }}"
-        graylog_password: "{{ graylog_password }}"
-
     - name: Get stream id from stream name query
       graylog_streams:
         action: query_streams
@@ -37,32 +27,14 @@
       loop: "{{ graylog_streams }}"
       register: streams
 
-
     - name: "Print matching streams"
       ansible.builtin.debug:
         msg: "Stream Name: {{ item.invocation.module_args.stream_name }}, Stream ID: {{ item.json.stream_id }}"
       with_items: "{{ streams.results }}"
 
-
-    - name: Create stream
+    - name: Pause streams
       graylog_streams:
-        action: create
-        protocol: http
-        graylog_fqdn: "{{ graylog_fqdn }}"
-        graylog_port: "{{ graylog_port }}"
-        graylog_user: "{{ graylog_user }}"
-        graylog_password: "{{ graylog_password }}"
-        allow_http: true
-        title: "{{ item.invocation.module_args.stream_name }}"
-        description: "test stream2 for ansible-graylog-module"
-        matching_type: "AND"
-        remove_matches_from_default_stream: False
-      with_items: "{{ streams.results }}"
-      when: item.json.stream_id == "0"
-
-    - name: Start streams
-      graylog_streams:
-        action: start_stream
+        action: pause_stream
         protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
