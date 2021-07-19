@@ -18,7 +18,7 @@
     - name: Display all inputs
       graylog_inputs:
         action: "list"
-        allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
@@ -37,7 +37,7 @@
     - name: Display all extractors for input
       graylog_inputs:
         action: "list_extractors"
-        allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"

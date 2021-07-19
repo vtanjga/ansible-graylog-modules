@@ -256,6 +256,7 @@ EXAMPLES = '''
 # import module snippets
 import json
 import base64
+from urllib.parse import urlunparse, urljoin
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import re
@@ -282,7 +283,7 @@ def list(module, base_url, headers):
 def query_inputs(module, base_url, headers, title):
 
     url = base_url
-    inputExist = False
+    inputExists = False
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -300,9 +301,9 @@ def query_inputs(module, base_url, headers, title):
     #TODO: match on more than just title, add port, log_format, input_protocol
     for graylogInputs in data['inputs']:
       if re.match(regex, graylogInputs['title']) is not None:
-        inputExist = True
+        inputExists = True
 
-    return inputExist
+    return inputExists
 
 
 def create_input(module, base_url, headers):
@@ -402,6 +403,7 @@ def list_extractors(module, base_url, headers):
 
 #TODO: define create_extractors func, not sure how to handle json files, templates or build with dicts, or ?
 
+#TODO: define create_static_fields func
 
 def delete(module, base_url, headers):
 
@@ -424,7 +426,7 @@ def get_token(module, endpoint, username, password):
 
     headers = '{ "Content-Type": "application/json", "X-Requested-By": "Graylog API", "Accept": "application/json" }'
 
-    url = endpoint + "/api/system/sessions"
+    url = endpoint + "/system/sessions"
 
     payload = {}
     payload['username'] = username
@@ -455,13 +457,12 @@ def main():
         argument_spec=dict(
             action=dict(type='str', default='list',
                         choices=['create', 'update', 'list', 'list_extractors', 'delete']),
+            protocol=dict(type='str', required=False, default='http', choices=['http', 'https']),
             graylog_fqdn=dict(type='str'),
             graylog_port=dict(type='str'),
             graylog_user=dict(type='str'),
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
-            allow_http=dict(type='bool', required=False, default=False),
-
             force=dict(type='bool', required=False, default=False),
             log_format=dict(type='str', required=True,
                                 choices=['GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch']),
@@ -473,6 +474,7 @@ def main():
             node=dict(type='str', required=False),
             bind_address=dict(type='str', required=False, default='0.0.0.0'),
             port=dict(type='int', required=False, default=12201),
+            base_uri=dict(type='str', required=False, default='/api/system/inputs/'),
             allow_override_date=dict(type='bool', required=False, default=False),
             expand_structured_data=dict(type='bool', required=False, default=False),
             force_rdns=dict(type='bool', required=False, default=False),
@@ -497,39 +499,33 @@ def main():
         )
     )
 
-    action = module.params['action']
-    graylog_fqdn = module.params['graylog_fqdn']
-    graylog_port = module.params['graylog_port']
-    graylog_user = module.params['graylog_user']
-    graylog_password = module.params['graylog_password']
-    allow_http = module.params['allow_http']
+    # build common urls
+    url = module.params['graylog_fqdn'] + ':' + module.params['graylog_port']
+    url_bits = (module.params['protocol'], url, '/api', '', '', '')
+    base_url = urlunparse(url_bits)
+    #raise Exception(base_url)
+    inputs_url = urljoin(base_url, module.params['base_uri'])
+    #raise Exception(inputs_url)
 
-    if allow_http == True:
-      endpoint = "http://" + graylog_fqdn + ":" + graylog_port
-    else:
-      endpoint = "https://" + graylog_fqdn + ":" + graylog_port
-
-
-
-    base_url = endpoint + "/api/system/inputs"
-
-    api_token = get_token(module, endpoint, graylog_user, graylog_password)
+    api_token = get_token(module, base_url, module.params['graylog_user'], module.params['graylog_password'])
     headers = '{ "Content-Type": "application/json", \
                  "X-Requested-By": "Graylog API", \
                  "Accept": "application/json", \
                  "Authorization": "Basic ' + api_token.decode() + '" }'
 
+    action = module.params['action']
+
     if action == "list":
        # if index_set_id is None:
        #     index_set_id = default_index_set(module, endpoint, headers)
-        status, message, content, url = list(module, base_url, headers)
+        status, message, content, url = list(module, inputs_url, headers)
     elif action == "create":
         # create the input if one with same title does not exist
-        status, message, content, url = create_input(module, base_url, headers)
+        status, message, content, url = create_input(module, inputs_url, headers)
     elif action == "list_extractors":
-        status, message, content, url = list_extractors(module, base_url, headers)
+        status, message, content, url = list_extractors(module, inputs_url, headers)
     elif action == "delete":
-        status, message, content, url = create_input(module, base_url, headers)
+        status, message, content, url = create_input(module, inputs_url, headers)
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')

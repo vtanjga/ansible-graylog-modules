@@ -18,7 +18,7 @@
     - name: Create GELF HTTP input
       graylog_inputs:
         action: "create"
-        allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
@@ -34,7 +34,7 @@
     - name: Create GELF UDP input
       graylog_inputs:
         action: "create"
-        allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
@@ -49,7 +49,7 @@
 #    - name: Create Rsyslog TCP input
 #      graylog_inputs:
 #        action: "create"
-#        allow_http: "true"
+#        protocol: http
 #        graylog_fqdn: "{{ graylog_fqdn }}"
 #        graylog_port: "{{ graylog_port }}"
 #        graylog_user: "{{ graylog_user }}"
