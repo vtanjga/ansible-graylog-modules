@@ -384,14 +384,9 @@ def create(module, base_url, headers, index_set_id):
 def query_rules(module, base_url, headers):
 
     url = "/".join([base_url, module.params['stream_id'], "rules"])
-    #raise Exception(url)
-    payload = {}
     field = module.params['field']
     value = module.params['value']
-    #raise Exception(module.params['field'])
 
-
-    #TODO: GET current rules, compare field and value to determine duplication
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
     if info['status'] != 200:
         module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
@@ -399,51 +394,30 @@ def query_rules(module, base_url, headers):
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
         rules = json.loads(content)
-        #raise Exception(rules)
     except AttributeError:
         content = info.pop('body', '')
 
-    if rules is not None:
-        i = 0
-        while i < len(rules['stream_rules']):
-            rule = rules['stream_rules'][i]
+    if rules['stream_rules']:
+        for rule in rules['stream_rules']:
             if field == rule['field'] and value == rule['value']:
-                rule_json = {'rule_id': rule['id']}
-                #raise Exception(rule_json)
+                rule_id = dict(rule_id=rule['id'])
                 break
             else:
-                rule_json = {'rule_id': '0'}
-            i += 1
+                rule_id = dict(rule_id=False)
     else:
-        raise Exception("No streams returned from Graylog API")
+        rule_id = dict(rule_id=False)
 
-    return info['status'], info['msg'], json.dumps(rule_json), url
+    content = json.dumps(rule_id)
 
-    #for key in ['field', 'type', 'value', 'inverted', 'description']:
-    #    if module.params[key] is not None:
-    #        payload[key] = module.params[key]
+    return info['status'], info['msg'], content, url
 
-    #response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
-
-    #if info['status'] != 201:
-    #    module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
-
-    #try:
-    #    content = to_text(response.read(), errors='surrogate_or_strict')
-    #except AttributeError:
-    #    content = info.pop('body', '')
-
-    #return info['status'], info['msg'], content, url
 
 def create_rule(module, base_url, headers):
 
     status, message, content, url = query_rules(module, base_url, headers)
-    #raise Exception(f'{status} {message} {content}')
     query_result = json.loads(content)
-    #raise Exception(result['rule_id'])
     if query_result['rule_id'] == "0":
         url = "/".join([base_url, module.params['stream_id'], "rules"])
-        #raise Exception(url)
         payload = {}
 
         for key in ['field', 'type', 'value', 'inverted', 'description']:
@@ -644,7 +618,6 @@ def list(module, base_url, headers, stream_id):
 
     if stream_id is not None:
         url = "/".join([base_url, stream_id])
-        #raise Exception(url)
     else:
         url = base_url
 
@@ -676,20 +649,19 @@ def query_streams(module, base_url, headers, stream_name):
     except AttributeError:
         content = info.pop('body', '')
 
-    if streams is not None:
-        i = 0
-        while i < len(streams['streams']):
-            stream = streams['streams'][i]
+    if streams:
+        for stream in streams['streams']:
             if stream_name == stream['title']:
                 stream_json = {'stream_id': stream['id']}
                 break
             else:
                 stream_json = {'stream_id': '0'}
-            i += 1
     else:
-        raise Exception("No streams returned from Graylog API")
+        stream_json = {'stream_id': '0'}
 
-    return info['status'], info['msg'], json.dumps(stream_json), url
+    content = json.dumps(stream_json)
+
+    return info['status'], info['msg'], content, url
 
 
 def default_index_set(module, endpoint, headers):
