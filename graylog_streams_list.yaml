@@ -18,6 +18,7 @@
       graylog_streams:
         action: list
         allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
@@ -34,8 +35,9 @@
       graylog_streams:
         action: list
         allow_http: true
+        protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
-        stream_id: "60ee1c5602b089596bffbb44"
+        stream_id: "60ee1c5602b089596bffbb40"

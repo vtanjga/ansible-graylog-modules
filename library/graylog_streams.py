@@ -353,14 +353,15 @@ url:
 # import module snippets
 import json
 import base64
+from urllib.parse import urlparse, urlunparse, urljoin
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 
 
-def create(module, base_url, headers, index_set_id):
+def create(module, streams_url, headers, index_set_id):
     #TODO: call query_stream from here to check for existing streams similar to create_rule func
     # this will remove the need for Ansible playbook idempotency contortions
-    url = base_url
+    url = streams_url
 
     payload = {}
 
@@ -382,22 +383,21 @@ def create(module, base_url, headers, index_set_id):
 
     return info['status'], info['msg'], content, url
 
-def query_rules(module, base_url, headers):
+def query_rules(module, streams_url, headers):
     '''
     Check for rules in a given stream with matching field and value settings.
     If they exist, return the rule ID, if not return rule_id="0"
     :param module: Ansible module configuration settings
     :type module: dict
-    :param base_url: Graylog API URL
-    :type base_url: string
+    :param streams_url: Graylog API URL
+    :type streams_url: string
     :param headers: HTTP headers to be sent with API req
     :type headers: dict
     :return: HTTP status code and msg, response body, and API endpoint called
     :rtype: tuple
     '''
-
-    url = "/".join([base_url, module.params['stream_id'], "rules"])
-    #raise Exception(url)
+    rules_path = "/".join([module.params['stream_id'], "rules"])
+    url = urljoin(streams_url, rules_path)
     payload = {}
 
     field = module.params['field']
@@ -411,39 +411,46 @@ def query_rules(module, base_url, headers):
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
         rules = json.loads(content)
+        #raise Exception(rules)
     except IOError:
         raise IOError("Server response not readable")
 
-    for rule in rules['stream_rules']:
-        if field == rule['field'] and value == rule['value']:
-            rule_exists = dict(rule_exists=True)
-            break
-        else:
-            rule_exists = dict(rule_exists=False)
+    if rules['stream_rules']:
+        for rule in rules['stream_rules']:
+            if field == rule['field'] and value == rule['value']:
+                rule_id = dict(rule_id=rule['id'])
+                #raise Exception(rule_id)
+                break
+            else:
+                rule_id = dict(rule_id=False)
+    else:
+        rule_id = dict(rule_id=False)
 
-    content = json.dumps(rule_exists)
+    content = json.dumps(rule_id)
     return info['status'], info['msg'], content, url
 
-def create_rule(module, base_url, headers):
+def create_rule(module, streams_url, headers):
     """
     Create a stream rule after checking for existing rules with same field and value settings
     :param module: Ansible module configuration settings
     :type module: dict
-    :param base_url: Graylog API URL
-    :type base_url: string
+    :param streams_url: Graylog API URL
+    :type streams_url: string
     :param headers: HTTP headers to be sent with API req
     :type headers: dict
     :return: HTTP status code and msg, response body, and API endpoint called
     :rtype: tuple
     """
 
-    status, message, content, url = query_rules(module, base_url, headers)
+    status, message, content, url = query_rules(module, streams_url, headers)
     query_result = json.loads(content)
-    if "rule_exists" in query_result:
-        if not query_result['rule_exists']:
-            url = "/".join([base_url, module.params['stream_id'], "rules"])
-            payload = {}
+    #raise Exception(query_result)
+    if 'rule_id' in query_result:
+        rules_path = "/".join([module.params['stream_id'], "rules"])
+        url = urljoin(streams_url, rules_path)
 
+        if not query_result['rule_id']:
+            payload = {}
             for key in ['field', 'type', 'value', 'inverted', 'description']:
                 if module.params[key] is not None:
                     payload[key] = module.params[key]
@@ -461,14 +468,14 @@ def create_rule(module, base_url, headers):
             info = dict(url=url, status=200, msg="stream rule exists")
 
     else:
-        raise Exception("Key 'rule_exists' not present in 'query_result' dict.")
+        raise Exception("Key 'rule_id' not present in 'query_result' dict.")
 
     return info['status'], info['msg'], content, url
 
 
-def update(module, base_url, headers, stream_id, title, description, remove_matches_from_default_stream, matching_type, rules, index_set_id):
+def update(module, streams_url, headers, stream_id, title, description, remove_matches_from_default_stream, matching_type, rules, index_set_id):
 
-    url = "/".join([base_url, stream_id])
+    url = "/".join([streams_url, stream_id])
 
     payload = {}
 
@@ -521,11 +528,11 @@ def update(module, base_url, headers, stream_id, title, description, remove_matc
     return info['status'], info['msg'], content, url
 
 
-def update_rule(module, base_url, headers, stream_id, rule_id, field, type, value, inverted, description):
+def update_rule(module, streams_url, headers, stream_id, rule_id, field, type, value, inverted, description):
 
     payload = {}
 
-    url = "/".join([base_url, stream_id, "rules", rule_id])
+    url = "/".join([streams_url, stream_id, "rules", rule_id])
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -572,26 +579,9 @@ def update_rule(module, base_url, headers, stream_id, rule_id, field, type, valu
     return info['status'], info['msg'], content, url
 
 
-def delete(module, base_url, headers, stream_id):
+def delete(module, streams_url, headers, stream_id):
 
-    url = "/".join([base_url, stream_id])
-
-    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
-
-    if info['status'] != 204:
-        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
-
-    try:
-        content = to_text(response.read(), errors='surrogate_or_strict')
-    except AttributeError:
-        content = info.pop('body', '')
-
-    return info['status'], info['msg'], content, url
-
-
-def delete_rule(module, base_url, headers, stream_id, rule_id):
-
-    url = "/".join([base_url, stream_id, "rules", rule_id])
+    url = "/".join([streams_url, stream_id])
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
 
@@ -606,9 +596,29 @@ def delete_rule(module, base_url, headers, stream_id, rule_id):
     return info['status'], info['msg'], content, url
 
 
-def start(module, base_url, headers, stream_id):
+def delete_rule(module, streams_url, headers):
 
-    url = "/".join([base_url, stream_id, "resume"])
+    status, message, content, url = query_rules(module, streams_url, headers)
+    query_result = json.loads(content)
+    rules_path = "/".join([module.params['stream_id'], "rules", query_result['rule_id']])
+    url = urljoin(streams_url, rules_path)
+    #raise Exception(url)
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
+
+    if info['status'] != 204:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+    except AttributeError:
+        content = info.pop('body', '')
+
+    return info['status'], info['msg'], content, url
+
+
+def start(module, streams_url, headers, stream_id):
+
+    url = "/".join([streams_url, stream_id, "resume"])
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST')
 
@@ -623,9 +633,9 @@ def start(module, base_url, headers, stream_id):
     return info['status'], info['msg'], content, url
 
 
-def pause(module, base_url, headers, stream_id):
+def pause(module, streams_url, headers, stream_id):
 
-    url = "/".join([base_url, stream_id, "pause"])
+    url = "/".join([streams_url, stream_id, "pause"])
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST')
 
@@ -640,13 +650,11 @@ def pause(module, base_url, headers, stream_id):
     return info['status'], info['msg'], content, url
 
 
-def list(module, base_url, headers, stream_id):
-
+def list(module, streams_url, headers, stream_id):
     if stream_id is not None:
-        url = "/".join([base_url, stream_id])
-        #raise Exception(url)
+        url = urljoin(streams_url, stream_id)
     else:
-        url = base_url
+        url = streams_url
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -661,9 +669,9 @@ def list(module, base_url, headers, stream_id):
     return info['status'], info['msg'], content, url
 
 
-def query_streams(module, base_url, headers, stream_name):
+def query_streams(module, streams_url, headers, stream_name):
 
-    url = base_url
+    url = streams_url
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -688,9 +696,9 @@ def query_streams(module, base_url, headers, stream_name):
     return info['status'], info['msg'], content, url
 
 
-def default_index_set(module, endpoint, headers):
+def default_index_set(module, base_url, headers):
 
-    url = "%s/api/system/indices/index_sets?skip=0&limit=0&stats=false" % (endpoint)
+    url = "%s/api/system/indices/index_sets?skip=0&limit=0&stats=false" % (base_url)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -708,16 +716,16 @@ def default_index_set(module, endpoint, headers):
     return default_index_set_id
 
 
-def get_token(module, endpoint, username, password):
+def get_token(module, base_url, username, password):
 
     headers = '{ "Content-Type": "application/json", "X-Requested-By": "Graylog API", "Accept": "application/json" }'
 
-    url = endpoint + "/api/system/sessions"
+    url = urljoin(base_url, "/api/system/sessions")
 
     payload = {
         'username': username,
         'password': password,
-        'host': endpoint
+        'host': base_url
     }
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
 
@@ -740,8 +748,10 @@ def get_token(module, endpoint, username, password):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
+            protocol=dict(type='str', required=False, default='http', choices=['http', 'https']),
             graylog_fqdn=dict(type='str'),
             graylog_port=dict(type='str'),
+            base_uri=dict(type='str', required=False, default='/api/streams/'),
             graylog_user=dict(type='str'),
             graylog_password=dict(type='str', no_log=True),
             allow_http=dict(type='bool', required=False, default=False),
@@ -764,8 +774,6 @@ def main():
         )
     )
 
-    graylog_fqdn = module.params['graylog_fqdn']
-    graylog_port = module.params['graylog_port']
     graylog_user = module.params['graylog_user']
     graylog_password = module.params['graylog_password']
     action = module.params['action']
@@ -782,45 +790,47 @@ def main():
     remove_matches_from_default_stream = module.params['remove_matches_from_default_stream']
     matching_type = module.params['matching_type']
     rules = module.params['rules']
-    allow_http = module.params['allow_http']
+    url = module.params['graylog_fqdn'] + ':' + module.params['graylog_port']
 
-    if allow_http == True:
-        endpoint = "http://" + graylog_fqdn + ":" + graylog_port
-    else:
-        endpoint = "https://" + graylog_fqdn + ":" + graylog_port
+    url_bits = (module.params['protocol'], url, '', '', '', '')
+    base_url = urlunparse(url_bits)
+    #raise Exception(base_url)
+    streams_url = urljoin(base_url, module.params['base_uri'])
+    #raise Exception(streams_url)
 
-    base_url = endpoint + "/api/streams"
-
-    api_token = get_token(module, endpoint, graylog_user, graylog_password)
+    api_token = get_token(module, base_url, graylog_user, graylog_password)
     headers = '{ "Content-Type": "application/json", \
                  "X-Requested-By": "Graylog API", \
                  "Accept": "application/json", \
                  "Authorization": "Basic ' + api_token.decode() + '" }'
-
+    #TODO: is there a way to get rid of this cond block?
+    # seems like could call the func named in the playbook if all func params were identical?
     if action == "create":
         if index_set_id is None:
-            index_set_id = default_index_set(module, endpoint, headers)
-        status, message, content, url = create(module, base_url, headers, index_set_id)
+            index_set_id = default_index_set(module, base_url, headers)
+        status, message, content, url = create(module, streams_url, headers, index_set_id)
     elif action == "create_rule":
-        status, message, content, url = create_rule(module, base_url, headers)
+        status, message, content, url = create_rule(module, streams_url, headers)
     elif action == "update":
-        status, message, content, url = update(module, base_url, headers, stream_id, title, description, remove_matches_from_default_stream, matching_type, rules, index_set_id)
+        status, message, content, url = update(module, streams_url, headers, stream_id, title, description, remove_matches_from_default_stream, matching_type, rules, index_set_id)
     elif action == "update_rule":
-        status, message, content, url = update_rule(module, base_url, headers, stream_id, rule_id, field, type, value, inverted, description)
+        status, message, content, url = update_rule(module, streams_url, headers, stream_id, rule_id, field, type, value, inverted, description)
     elif action == "delete":
-        status, message, content, url = delete(module, base_url, headers, stream_id)
+        status, message, content, url = delete(module, streams_url, headers)
     elif action == "delete_rule":
-        status, message, content, url = delete_rule(module, base_url, headers, stream_id, rule_id)
+        status, message, content, url = delete_rule(module, streams_url, headers)
     elif action == "start":
-        status, message, content, url = start(module, base_url, headers, stream_id)
+        status, message, content, url = start(module, streams_url, headers, stream_id)
     elif action == "pause":
-        status, message, content, url = pause(module, base_url, headers, stream_id)
+        status, message, content, url = pause(module, streams_url, headers, stream_id)
     elif action == "list":
-        status, message, content, url = list(module, base_url, headers, stream_id)
+        status, message, content, url = list(module, streams_url, headers, stream_id)
     elif action == "query_streams":
-        status, message, content, url = query_streams(module, base_url, headers, stream_name)
+        status, message, content, url = query_streams(module, streams_url, headers, stream_name)
     elif action == "query_rules":
-        status, message, content, url = query_rules(module, base_url, headers)
+        status, message, content, url = query_rules(module, streams_url, headers)
+    else:
+        raise IOError('Action is not in playbook list of allowed choices.')
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')
