@@ -261,9 +261,14 @@ from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import re
 
-def list(module, base_url, headers):
+def list(module, inputs_url, headers):
 
-    url = base_url
+    url = inputs_url
+    input_id = module.params['input_id']
+    if input_id is not None:
+        url = urljoin(url, input_id)
+    else:
+        url = url
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -280,10 +285,10 @@ def list(module, base_url, headers):
 
 
 
-def query_inputs(module, base_url, headers, title):
+def query_inputs(module, inputs_url, headers, title):
 
-    url = base_url
-    inputExists = False
+    url = inputs_url
+    input_id = dict(input_id=False)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -299,96 +304,101 @@ def query_inputs(module, base_url, headers, title):
     regex = r"^" + re.escape(title) + r"$"
 
     #TODO: match on more than just title, add port, log_format, input_protocol
-    for graylogInputs in data['inputs']:
-      if re.match(regex, graylogInputs['title']) is not None:
-        inputExists = True
+    for input in data['inputs']:
+      if re.match(regex, input['title']) is not None:
+         input_id = dict(input_id=input['id'])
 
-    return inputExists
+    content = json.dumps(input_id)
+
+    return info['status'], info['msg'], content, inputs_url
 
 
-def create_input(module, base_url, headers):
+def create_input(module, inputs_url, headers):
     """
      Check if an input with same title exists, if so update/PUT it, if not create/POST it.
     :param module: Ansible playbook parameters
     :type module: str
-    :param base_url: Graylog API URL
-    :type base_url: str
+    :param inputs_url: Graylog API URL
+    :type inputs_url: str
     :param headers: HTTP Headers to be sent to Graylog API
     :type headers: dict
     :return: HTTP Response Code, message, response body, and API URL
     :rtype: tuple
     """
 
-    url = base_url
-
+    url = inputs_url
     log_format = module.params['log_format']
 
-    if module.params['action'] == "create":
-      inputExist = query_inputs(module, base_url, headers, module.params['title'])
-      if inputExist == True:
-        #TODO: use this exit_json in streams module also!
-        module.exit_json(changed=False)
-      httpMethod = "POST"
-    else:
-      httpMethod = "PUT"
-      url = base_url + "/" + module.params['input_id']
+    status, message, content, url = query_inputs(module, url, headers, module.params['title'])
+    query_result = json.loads(content)
 
-    configuration = {}
-
-    # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
-    if log_format == "GELF":
-        if module.params['input_protocol'] == "TCP":
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
-        elif module.params['input_protocol'] == "UDP":
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
+    if 'input_id' in query_result:
+        if query_result['input_id']:
+            module.exit_json(changed=False)
         else:
-            module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
-        for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
-                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
-                 'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size' ]:
-            if module.params[key] is not None:
-                configuration[key] = module.params[key]
-    elif log_format == "Syslog":
-        for key in [ 'bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
-                 'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
-                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter' ]:
-            if module.params['input_protocol'] == "UDP":
-                module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
-            else:
-                module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
-            if module.params[key] is not None:
-                configuration[key] = module.params[key]
-    elif log_format == "Cloudtrail":
-        raise IOError("Cloudtrail input not implemented yet :(")
-    elif log_format == "Cloudwatch":
-        raise IOError("Cloudwatch input not implemented yet :(")
+            httpMethod = "POST"
+            configuration = {}
 
-    payload = {}
+            # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
+            if log_format == "GELF":
+                if module.params['input_protocol'] == "TCP":
+                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
+                elif module.params['input_protocol'] == "UDP":
+                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
+                else:
+                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
+                for key in ['bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
+                            'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
+                            'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
+                            'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size']:
+                    if module.params[key] is not None:
+                        configuration[key] = module.params[key]
+            elif log_format == "Syslog":
+                for key in ['bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
+                            'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
+                            'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
+                            'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter']:
+                    if module.params['input_protocol'] == "UDP":
+                        module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
+                    else:
+                        module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
+                    if module.params[key] is not None:
+                        configuration[key] = module.params[key]
+            elif log_format == "Cloudtrail":
+                raise IOError("Cloudtrail input not implemented yet :(")
+            elif log_format == "Cloudwatch":
+                raise IOError("Cloudwatch input not implemented yet :(")
 
-    payload['type'] = module.params['input_protocol']
-    payload['title'] = module.params['title']
-    payload['global'] = module.params['global_input']
-    payload['node'] = module.params['node']
-    payload['configuration'] = configuration
+            payload = {}
 
-    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method=httpMethod, data=module.jsonify(payload))
+            payload['type'] = module.params['input_protocol']
+            payload['title'] = module.params['title']
+            payload['global'] = module.params['global_input']
+            payload['node'] = module.params['node']
+            payload['configuration'] = configuration
 
-    if info['status'] != 201:
-        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+            response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method=httpMethod, data=module.jsonify(payload))
 
-    try:
-        content = to_text(response.read(), errors='surrogate_or_strict')
-    except AttributeError:
-        content = info.pop('body', '')
+            if info['status'] != 201:
+                module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
-    return info['status'], info['msg'], content, base_url
+            try:
+                content = to_text(response.read(), errors='surrogate_or_strict')
+            except AttributeError:
+                content = info.pop('body', '')
+    else:
+        raise Exception("Key 'input_id' not present in 'query_result' dict.")
 
-def list_extractors(module, base_url, headers):
+    return info['status'], info['msg'], content, inputs_url
+
+def list_extractors(module, inputs_url, headers):
     # http://127.0.0.1:9000/api/system/inputs/60f096d3062742757d8958c0/extractors
 
-    url = base_url + "/" + module.params['input_id'] + "/extractors"
+#    url = inputs_url + "/" + module.params['input_id'] + "/extractors"
+
+    path = "/".join([module.params['input_id'], 'extractors'])
+    url = urljoin(inputs_url, path)
+    raise Exception(url)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -405,9 +415,9 @@ def list_extractors(module, base_url, headers):
 
 #TODO: define create_static_fields func
 
-def delete(module, base_url, headers):
+def delete(module, inputs_url, headers):
 
-    url = base_url + "/" + module.params['input_id']
+    url = inputs_url + "/" + module.params['input_id']
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
 

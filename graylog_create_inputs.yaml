@@ -26,7 +26,7 @@
         log_format: "GELF"
         input_protocol: "TCP"
         validate_certs: "false"
-        title: "Test2 input GELF HTTP"
+        title: "GELF HTTP"
         global_input: "true"
         bind_address: "0.0.0.0"
         port: 1514
@@ -41,7 +41,7 @@
         graylog_password: "{{ graylog_password }}"
         log_format: "GELF"
         input_protocol: "UDP"
-        title: "Test2 GELF UDP"
+        title: "GELF UDP"
         global_input: "true"
         bind_address: "0.0.0.0"
         port: 12201
