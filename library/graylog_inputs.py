@@ -285,10 +285,11 @@ def list(module, inputs_url, headers):
 
 
 
-def query_inputs(module, inputs_url, headers, title):
+def query_inputs(module, inputs_url, headers):
 
     url = inputs_url
     input_id = dict(input_id=False)
+    title = module.params['title']
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -466,7 +467,7 @@ def main():
     module = AnsibleModule(
         argument_spec=dict(
             action=dict(type='str', default='list',
-                        choices=['create', 'update', 'list', 'list_extractors', 'delete']),
+                        choices=['create', 'update', 'list', 'list_extractors', 'delete', 'query_inputs']),
             protocol=dict(type='str', required=False, default='http', choices=['http', 'https']),
             graylog_fqdn=dict(type='str'),
             graylog_port=dict(type='str'),
@@ -475,7 +476,7 @@ def main():
             validate_certs=dict(type='bool', required=False, default=True),
             force=dict(type='bool', required=False, default=False),
             log_format=dict(type='str', required=True,
-                                choices=['GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch']),
+                                choices=['gelf', 'syslog', 'cloudtrail', 'cloudwatch']),
             input_protocol=dict(type='str', required=True,
                         choices=[ 'UDP', 'TCP', 'HTTP' ]),
             title=dict(type='str', required=True ),
@@ -536,6 +537,10 @@ def main():
         status, message, content, url = list_extractors(module, inputs_url, headers)
     elif action == "delete":
         status, message, content, url = create_input(module, inputs_url, headers)
+    elif action == "query_inputs":
+        status, message, content, url = query_inputs(module, inputs_url, headers)
+    else:
+        raise IOError('Action is not in playbook list of allowed choices.')
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')

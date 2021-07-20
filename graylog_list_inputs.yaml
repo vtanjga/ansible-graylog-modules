@@ -9,9 +9,8 @@
     graylog_inputs:
       - gelf
       - syslog
-      - bal
-      - cloudwatch
-      - test1
+  #    - cloudwatch
+  #    - cloudtrail
 
 
   tasks:
@@ -24,28 +23,43 @@
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
         validate_certs: "false"
-        log_format: "GELF"
+        log_format: "{{ item }}"
         input_protocol: "TCP"
         title: "Test2 input GELF HTTP"
-      #loop: "{{ graylog_inputs }}"
+      loop: "{{ graylog_inputs }}"
       register: input_list
 
     - name: Print inputs
       ansible.builtin.debug:
-        msg: "{{ input_list }}"
+        msg: "hiya"
+      with_items: "{{ input_list.results }}"
 
-    - name: Display all extractors for input
+    - name: Query inputs
       graylog_inputs:
-        action: "list_extractors"
+        action: "query_inputs"
         protocol: http
         graylog_fqdn: "{{ graylog_fqdn }}"
         graylog_port: "{{ graylog_port }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"
-        input_id: "60f096d3062742757d8958c0"
-        validate_certs: "false"
-        log_format: "GELF"
         input_protocol: "TCP"
-        title: "Test2 input GELF HTTP"
-      #loop: "{{ graylog_inputs }}"
-      register: input_list
+        log_format: "{{ item }}"
+        title: "GELF UDP"
+      loop: "{{ graylog_inputs }}"
+      register: inputs
+
+    - name: Print inputs
+      ansible.builtin.debug:
+        msg: "hiya"
+      with_items: "{{ inputs.results }}"
+
+ #   - name: Display all extractors for input
+ #     graylog_inputs:
+ #       action: "list_extractors"
+ #       protocol: http
+ #       graylog_fqdn: "{{ graylog_fqdn }}"
+ #       graylog_port: "{{ graylog_port }}"
+ #       graylog_user: "{{ graylog_user }}"
+ #       graylog_password: "{{ graylog_password }}"
+ #       input_id: "{{ json.input.id }}"
+ #     loop: "{{ input_list.results }}"
