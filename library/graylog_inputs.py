@@ -330,47 +330,46 @@ def create_input(module, inputs_url, headers):
     url = inputs_url
     log_format = module.params['log_format']
 
-    status, message, content, url = query_inputs(module, url, headers, module.params['title'])
+    status, message, content, url = query_inputs(module, url, headers)
     query_result = json.loads(content)
 
     if 'input_id' in query_result:
         if query_result['input_id']:
-        module.exit_json(changed=False)
+            module.exit_json(changed=False)
         else:
-      httpMethod = "POST"
+           httpMethod = "POST"
+
     configuration = {}
 
-
-   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
-    # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
-    if log_format == "GELF":
+    #TODO: add flags TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
+    if log_format == "gelf":
         if module.params['input_protocol'] == "TCP":
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
         elif module.params['input_protocol'] == "UDP":
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
         else:
             module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
-        for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
-                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
-                 'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size' ]:
+        for key in ['bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size',
+                     'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password',
+                     'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit',
+                     'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size']:
             if module.params[key] is not None:
                 configuration[key] = module.params[key]
-    elif log_format == "Syslog":
-        for key in [ 'bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
-                 'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
-                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter' ]:
+    elif log_format == "syslog":
+        for key in ['bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns',
+                     'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message',
+                     'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password',
+                     'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter']:
             if module.params['input_protocol'] == "UDP":
                 module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
             else:
                 module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
             if module.params[key] is not None:
                 configuration[key] = module.params[key]
-    elif log_format == "Cloudtrail":
-                raise IOError("Cloudtrail input not implemented yet :(")
-    elif log_format == "Cloudwatch":
-                raise IOError("Cloudwatch input not implemented yet :(")
+    elif log_format == "cloudtrail":
+        raise IOError("Cloudtrail input not implemented yet :(")
+    elif log_format == "cloudwatch":
+        raise IOError("Cloudwatch input not implemented yet :(")
 
     payload = {}
 
@@ -393,13 +392,12 @@ def create_input(module, inputs_url, headers):
     return info['status'], info['msg'], content, inputs_url
 
 def list_extractors(module, inputs_url, headers):
-    # http://127.0.0.1:9000/api/system/inputs/60f096d3062742757d8958c0/extractors
+    # Example endpoint: http://127.0.0.1:9000/api/system/inputs/60f096d3062742757d8958c0/extractors
 
-#    url = inputs_url + "/" + module.params['input_id'] + "/extractors"
+    #url = inputs_url + "/" + module.params['input_id'] + "/extractors"
 
     path = "/".join([module.params['input_id'], 'extractors'])
     url = urljoin(inputs_url, path)
-    raise Exception(url)
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
