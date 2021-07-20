@@ -335,60 +335,60 @@ def create_input(module, inputs_url, headers):
 
     if 'input_id' in query_result:
         if query_result['input_id']:
-            module.exit_json(changed=False)
+        module.exit_json(changed=False)
         else:
-            httpMethod = "POST"
-            configuration = {}
+      httpMethod = "POST"
+    configuration = {}
 
-            # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
-            if log_format == "GELF":
-                if module.params['input_protocol'] == "TCP":
-                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
-                elif module.params['input_protocol'] == "UDP":
-                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
-                else:
-                    module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
-                for key in ['bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
-                            'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                            'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
-                            'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size']:
-                    if module.params[key] is not None:
-                        configuration[key] = module.params[key]
-            elif log_format == "Syslog":
-                for key in ['bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
-                            'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
-                            'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
-                            'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter']:
-                    if module.params['input_protocol'] == "UDP":
-                        module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
-                    else:
-                        module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
-                    if module.params[key] is not None:
-                        configuration[key] = module.params[key]
-            elif log_format == "Cloudtrail":
+
+   #TODO: add conditionals here based on new module param log_format to accomodate all input types, no need to created separate functions for each afaik
+    # flags: TCP, UDP, HTTP, Cloudwatch, Cloudtrail,
+    if log_format == "GELF":
+        if module.params['input_protocol'] == "TCP":
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.tcp.GELFTCPInput"
+        elif module.params['input_protocol'] == "UDP":
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.udp.GELFUDPInput"
+        else:
+            module.params['input_protocol'] = "org.graylog2.inputs.gelf.http.GELFHttpInput"
+        for key in [ 'bind_address', 'port', 'number_worker_threads', 'override_source', 'recv_buffer_size', \
+                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
+                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter', 'decompress_size_limit', \
+                 'enable_cors', 'idle_writer_timeout', 'max_chunk_size', 'max_message_size' ]:
+            if module.params[key] is not None:
+                configuration[key] = module.params[key]
+    elif log_format == "Syslog":
+        for key in [ 'bind_address', 'port', 'allow_override_date', 'expand_structured_data', 'force_rdns', \
+                 'number_worker_threads', 'override_source', 'recv_buffer_size', 'store_full_message', \
+                 'tcp_keepalive', 'tls_enable', 'tls_cert_file', 'tls_key_file', 'tls_key_password', \
+                 'tls_client_auth', 'tls_client_auth_cert_file', 'use_null_delimiter' ]:
+            if module.params['input_protocol'] == "UDP":
+                module.params['input_protocol'] = "org.graylog2.inputs.syslog.udp.SyslogUDPInput"
+            else:
+                module.params['input_protocol'] = "org.graylog2.inputs.syslog.tcp.SyslogTCPInput"
+            if module.params[key] is not None:
+                configuration[key] = module.params[key]
+    elif log_format == "Cloudtrail":
                 raise IOError("Cloudtrail input not implemented yet :(")
-            elif log_format == "Cloudwatch":
+    elif log_format == "Cloudwatch":
                 raise IOError("Cloudwatch input not implemented yet :(")
 
-            payload = {}
+    payload = {}
 
-            payload['type'] = module.params['input_protocol']
-            payload['title'] = module.params['title']
-            payload['global'] = module.params['global_input']
-            payload['node'] = module.params['node']
-            payload['configuration'] = configuration
+    payload['type'] = module.params['input_protocol']
+    payload['title'] = module.params['title']
+    payload['global'] = module.params['global_input']
+    payload['node'] = module.params['node']
+    payload['configuration'] = configuration
 
-            response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method=httpMethod, data=module.jsonify(payload))
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method=httpMethod, data=module.jsonify(payload))
 
-            if info['status'] != 201:
-                module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+    if info['status'] != 201:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
-            try:
-                content = to_text(response.read(), errors='surrogate_or_strict')
-            except AttributeError:
-                content = info.pop('body', '')
-    else:
-        raise Exception("Key 'input_id' not present in 'query_result' dict.")
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+    except AttributeError:
+        content = info.pop('body', '')
 
     return info['status'], info['msg'], content, inputs_url
 
