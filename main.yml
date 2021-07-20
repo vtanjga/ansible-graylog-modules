@@ -316,7 +316,7 @@
 
     - name: Delete stream
       graylog_streams:
-        action: delete
+        action: delete_stream
         endpoint: "{{ endpoint }}"
         graylog_user: "{{ graylog_user }}"
         graylog_password: "{{ graylog_password }}"

@@ -1,0 +1,43 @@
+- hosts: localhost
+  gather_facts: no
+  become: true
+  vars:
+    graylog_fqdn: "localhost"
+    graylog_port: "9000"
+    graylog_user: "admin"
+    graylog_password: "admin"
+    graylog_streams:
+      - gelf
+      - syslog
+      - bal
+      - cloudwatch
+
+
+  tasks:
+    - name: List streams
+      graylog_streams:
+        action: list
+        allow_http: true
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+      loop: "{{ graylog_streams }}"
+      register: stream_list
+
+    - name: "Print matching streams"
+      ansible.builtin.debug:
+        msg: "Number of streams:"
+      with_items: "{{ stream_list.results }}"
+
+    - name: List single stream by ID
+      graylog_streams:
+        action: list
+        allow_http: true
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        stream_id: "60f5cbc5ec800610f8b949e3"
