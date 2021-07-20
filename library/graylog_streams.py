@@ -381,26 +381,58 @@ def create(module, base_url, headers, index_set_id):
 
     return info['status'], info['msg'], content, url
 
-
-def create_rule(module, base_url, headers):
+def query_rules(module, base_url, headers):
 
     url = "/".join([base_url, module.params['stream_id'], "rules"])
+    field = module.params['field']
+    value = module.params['value']
+    rule_id = dict(rule_id=False)
 
-    payload = {}
-
-    for key in ['field', 'type', 'value', 'inverted', 'description']:
-        if module.params[key] is not None:
-            payload[key] = module.params[key]
-
-    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
-
-    if info['status'] != 201:
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
+    if info['status'] != 200:
         module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
 
     try:
         content = to_text(response.read(), errors='surrogate_or_strict')
+        rules = json.loads(content)
     except AttributeError:
         content = info.pop('body', '')
+
+    if rules['stream_rules']:
+        for rule in rules['stream_rules']:
+            if field == rule['field'] and value == rule['value']:
+                rule_id = dict(rule_id=rule['id'])
+                break
+
+    content = json.dumps(rule_id)
+
+    return info['status'], info['msg'], content, url
+
+
+def create_rule(module, base_url, headers):
+
+    status, message, content, url = query_rules(module, base_url, headers)
+    query_result = json.loads(content)
+    if query_result['rule_id'] == "0":
+        url = "/".join([base_url, module.params['stream_id'], "rules"])
+        payload = {}
+
+        for key in ['field', 'type', 'value', 'inverted', 'description']:
+            if module.params[key] is not None:
+                payload[key] = module.params[key]
+
+        response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='POST', data=module.jsonify(payload))
+
+        if info['status'] != 201:
+            module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+
+        try:
+            content = to_text(response.read(), errors='surrogate_or_strict')
+        except AttributeError:
+            content = info.pop('body', '')
+    else:
+        info = dict(url=url, status=200, msg="stream rule exists")
+
 
     return info['status'], info['msg'], content, url
 
@@ -602,6 +634,7 @@ def list(module, base_url, headers, stream_id):
 def query_streams(module, base_url, headers, stream_name):
 
     url = base_url
+    stream_json = {'stream_id': '0'}
 
     response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
 
@@ -614,18 +647,15 @@ def query_streams(module, base_url, headers, stream_name):
     except AttributeError:
         content = info.pop('body', '')
 
-    stream_id = ""
-    if streams is not None:
-
-        i = 0
-        while i < len(streams['streams']):
-            stream = streams['streams'][i]
+    if streams:
+        for stream in streams['streams']:
             if stream_name == stream['title']:
-                stream_id = stream['id']
+                stream_json = {'stream_id': stream['id']}
                 break
-            i += 1
 
-    return stream_id
+    content = json.dumps(stream_json)
+
+    return info['status'], info['msg'], content, url
 
 
 def default_index_set(module, endpoint, headers):
@@ -687,7 +717,7 @@ def main():
             allow_http=dict(type='bool', required=False, default=False),
             validate_certs=dict(type='bool', required=False, default=True),
             action=dict(type='str', required=False, default='list', choices=['create', 'create_rule', 'start', 'pause',
-                        'update', 'update_rule', 'delete', 'delete_rule', 'list', 'query_streams']),
+                        'update', 'update_rule', 'delete', 'delete_rule', 'list', 'query_streams', 'query_rules']),
             stream_id=dict(type='str'),
             stream_name=dict(type='str'),
             rule_id=dict(type='str'),
@@ -739,7 +769,7 @@ def main():
 
     if action == "create":
         if index_set_id is None:
-            index_set_id = default_index_set(module, endpoint, base_url, headers)
+            index_set_id = default_index_set(module, endpoint, headers)
         status, message, content, url = create(module, base_url, headers, index_set_id)
     elif action == "create_rule":
         status, message, content, url = create_rule(module, base_url, headers)
@@ -758,12 +788,14 @@ def main():
     elif action == "list":
         status, message, content, url = list(module, base_url, headers, stream_id)
     elif action == "query_streams":
-        stream_id = query_streams(module, base_url, headers, stream_name)
-        status, message, content, url = list(module, base_url, headers, stream_id)
+        status, message, content, url = query_streams(module, base_url, headers, stream_name)
+    elif action == "query_rules":
+        status, message, content, url = query_rules(module, base_url, headers)
 
     uresp = {}
     content = to_text(content, encoding='UTF-8')
 
+   # check that HTTP response body is valid JSON as req'd by Ansible
     try:
         js = json.loads(content)
     except ValueError:
