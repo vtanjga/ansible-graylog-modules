@@ -1,0 +1,73 @@
+- hosts: localhost
+  gather_facts: no
+  become: true
+  vars:
+    graylog_fqdn: "localhost"
+    graylog_port: "9000"
+    graylog_user: "admin"
+    graylog_password: "admin"
+    graylog_inputs:
+      - gelf
+      - syslog
+      - bal
+      - cloudwatch
+      - test1
+
+
+  tasks:
+    - name: Create GELF HTTP input
+      graylog_inputs:
+        action: "create"
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        log_format: "gelf"
+        input_protocol: "TCP"
+        validate_certs: "false"
+        title: "GELF HTTP"
+        global_input: "true"
+        bind_address: "0.0.0.0"
+        port: 1514
+
+    - name: Create GELF UDP input
+      graylog_inputs:
+        action: "create"
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        log_format: "gelf"
+        input_protocol: "UDP"
+        title: "GELF UDP"
+        global_input: "true"
+        bind_address: "0.0.0.0"
+        port: 12201
+
+#    - name: Create Rsyslog TCP input
+#      graylog_inputs:
+#        action: "create"
+#        protocol: http
+#        graylog_fqdn: "{{ graylog_fqdn }}"
+#        graylog_port: "{{ graylog_port }}"
+#        graylog_user: "{{ graylog_user }}"
+#        graylog_password: "{{ graylog_password }}"
+#        global_input: "true"
+#        title: "Rsyslog TCP"
+#        bind_address: "0.0.0.0"
+#        port: "514"
+#        log_format: "syslog"
+#        input_protocol: "UDP"
+#        #validate_certs: "false"
+#        #allow_override_date: "true"
+#        #expand_structured_data: "false"
+#        #force_rdns: "false"
+#        #number_worker_threads: "2"
+#        #recv_buffer_size: "1048576"
+#        #store_full_message: "true"
+
+ #   - name: Print inputs
+ #     ansible.builtin.debug:
+ #       msg: "{{ input_list }}"

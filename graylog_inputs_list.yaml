@@ -1,0 +1,65 @@
+- hosts: localhost
+  gather_facts: no
+  become: true
+  vars:
+    graylog_fqdn: "localhost"
+    graylog_port: "9000"
+    graylog_user: "admin"
+    graylog_password: "admin"
+    graylog_inputs:
+      - gelf
+      - syslog
+  #    - cloudwatch
+  #    - cloudtrail
+
+
+  tasks:
+    - name: Display all inputs
+      graylog_inputs:
+        action: "list"
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        validate_certs: "false"
+        log_format: "{{ item }}"
+        input_protocol: "TCP"
+        title: "Test2 input GELF HTTP"
+      loop: "{{ graylog_inputs }}"
+      register: input_list
+
+    - name: Print inputs
+      ansible.builtin.debug:
+        msg: "hiya"
+      with_items: "{{ input_list.results }}"
+
+    - name: Query inputs
+      graylog_inputs:
+        action: "query_inputs"
+        protocol: http
+        graylog_fqdn: "{{ graylog_fqdn }}"
+        graylog_port: "{{ graylog_port }}"
+        graylog_user: "{{ graylog_user }}"
+        graylog_password: "{{ graylog_password }}"
+        input_protocol: "TCP"
+        log_format: "{{ item }}"
+        title: "GELF UDP"
+      loop: "{{ graylog_inputs }}"
+      register: inputs
+
+    - name: Print inputs
+      ansible.builtin.debug:
+        msg: "hiya"
+      with_items: "{{ inputs.results }}"
+
+ #   - name: Display all extractors for input
+ #     graylog_inputs:
+ #       action: "list_extractors"
+ #       protocol: http
+ #       graylog_fqdn: "{{ graylog_fqdn }}"
+ #       graylog_port: "{{ graylog_port }}"
+ #       graylog_user: "{{ graylog_user }}"
+ #       graylog_password: "{{ graylog_password }}"
+ #       input_id: "{{ json.input.id }}"
+ #     loop: "{{ input_list.results }}"

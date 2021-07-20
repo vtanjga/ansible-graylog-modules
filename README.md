@@ -23,13 +23,13 @@ The following modules are available with the corresponding actions:
   * delete
   * list
 * graylog_streams
-  * create
+  * create_stream
   * create_rule
   * update
   * update_rule
-  * delete
+  * delete_stream
   * delete_rule
-  * list
+  * list_streams
   * query_streams - query by stream name (ie: to get stream ID)
 * graylog_pipelines
   * create
@@ -60,15 +60,10 @@ The following modules are available with the corresponding actions:
   * delete
   * test
 * graylog_input
-  * list
+  * list_inputs
   * delete
-* graylog_input_rsyslog
-  * create
+  * create_inputs
   * update
-* graylog_input_gelf
-  * create
-  * update
-
 
 ### Examples
 
