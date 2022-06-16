@@ -4,18 +4,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## Released
 ### Added
-- urllib.parse module import
-- set of testing playbooks exercising the actions that have been debugged/updated
-- stub module file for get_token function used in all other files
-- VERSION, README and CHANGELOG 
+- added get_input_id function used when id is not provided for delete action and for creation of extractors
+- added create_extractors
 
 ### Changed
-- graylog_inputs file combines several other files' functions into one
-- function names that were just plain verbs changed to include relevant graylog object name
-- function parameters renamed for clarity
+- module should work with python 2 and 3, so urlparse is used if version is lower than 3, urllib.parse
+- delete action on inputs uses name of the input
+
 
 ### Removed
 
-## [1.0.0] 2021-07-20
+## [1.0.0] 2022-01-27

@@ -15,7 +15,7 @@ description:
 version_added: "2.9"
 author: "Matthieu SIMON"
 options:
-  endpoint:
+  graylog_fqdn:
     description:
       - Graylog endoint. (i.e. graylog.mydomain.com).
     required: false
@@ -30,17 +30,17 @@ options:
       - Graylog privileged user password.
     required: false
     type: str
-  allow_http:
+  protocol:
     description:
-      - Allow non HTTPS connexion
+      - http or https
     required: false
-    default: false
-    type: bool
+    default: http
+    type: str
   validate_certs:
     description:
       - Allow untrusted certificate
     required: false
-    default: false
+    default: true
     type: bool
   action:
     description:
@@ -56,7 +56,7 @@ options:
       - Log event format or source (not all are implemented at this time)
     required: true
     choices: [ 'GELF', 'Syslog', 'Cloudtrail', 'Cloudwatch' ]
-    type: str  
+    type: str
   input_protocol:
     description:
       - Input type (not all are implemented at this time)
@@ -195,28 +195,32 @@ options:
     required: false
     default: 2097152
     type: int
+  extractors:
+    description:
+      - object describing extractors for input.
+    required: false
+    type: dict
 '''
 
 EXAMPLES = '''
 
   - name: Display all inputs
     graylog_input:
-      endpoint: "{{ graylog_endpoint }}"
+      graylog_fqdn: "{{ graylog_endpoint }}"
       graylog_user: "{{ graylog_user }}"
       graylog_password: "{{ graylog_password }}"
-      allow_http: "true"
+      protocol: "https"
       validate_certs: "false"
       action: "list"
 
   - name: Remove input with ID 1df0f1234abcd0000d0adf20
-    graylog_input:
-      endpoint: "{{ graylog_endpoint }}"
+    graylog_inputs:
+      graylog_fqdn: "{{ graylog_endpoint }}"
       graylog_user: "{{ graylog_user }}"
       graylog_password: "{{ graylog_password }}"
-      allow_http: "true"
-      validate_certs: "false"
-      action: "delete"        
-      input_id: "1df0f1234abcd0000d0adf20"  
+      protocol: "http"
+      action: "delete"
+      input_id: "1df0f1234abcd0000d0adf20"
   - name: Create GELF HTTP input
     graylog_inputs:
       action: "create"
@@ -232,31 +236,35 @@ EXAMPLES = '''
       validate_certs: "false"
       global_input: "true"
 
-  # this is from the rsyslog file, POST/PUT are combined in this version
-  - name: Update existing input
-    graylog_input_rsyslog:
-      action: "update"
-      allow_http: "true"
-      graylog_fqdn: "{{ graylog_fqdn }}"
-      graylog_port: "{{ graylog_port }}"
+  # Create input with json extractor. Currently only json,
+  # regex and split_and_index supported. Example extractors variable
+  # in vars.yml below
+  vars.yml:
+  extractors: {"some_extractor":{"key_prefix":"","key_separator":"_","key_whitespace_replacement":"_","kv_separator":"=","list_separator":",","replace_key_whitespace":false,"source_field":"message","type":"json"}}
+
+  - name: Create input and extractors
+    graylog_inputs:
+      graylog_fqdn: "{{ graylog_server }}"
       graylog_user: "{{ graylog_user }}"
       graylog_password: "{{ graylog_password }}"
-      title: "Rsyslog TCP"
-      validate_certs: "false"
-      input_protocol: "TCP"
-      global_input: "true"
-      allow_override_date: "true"
-      expand_structured_data: "false"
-      force_rdns: "true"
-      port: "1514"
-      store_full_message: "true"
-      input_id: "1df0f1234abcd0000d0adf20"
+      graylog_port: '9000'
+      action: "{{ action | default('create') }}"
+      title: "Gelf input"
+      port: "12000"
+      log_format: "GELF"
+      input_protocol: "{{ input_protocol | default('UDP') }}"
+      extractors: "{{ extractors }}"
 '''
 
 # import module snippets
 import json
 import base64
-from urllib.parse import urlunparse, urljoin
+import sys
+# from urllib.parse import urlunparse, urljoin
+if sys.version_info < (3, 0):
+    from urlparse import urlunparse, urljoin
+else:
+    from urllib.parse import urlunparse, urljoin
 from ansible.module_utils.basic import AnsibleModule
 from ansible.module_utils.urls import fetch_url, to_text
 import re
@@ -312,6 +320,105 @@ def query_inputs(module, inputs_url, headers):
     content = json.dumps(input_id)
 
     return info['status'], info['msg'], content, inputs_url
+
+def get_input_id(module, inputs_url, headers):
+
+    url = inputs_url
+    input_id = dict(input_id=False)
+    title = module.params['title']
+
+    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='GET')
+
+    if info['status'] != 200:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+        return
+
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+        data = json.loads(content)
+    except AttributeError:
+        content = info.pop('body', '')
+
+    regex = r"^" + re.escape(title) + r"$"
+
+    #TODO: match on more than just title, add port, log_format, input_protocol
+    if len(data['inputs']) > 0:
+        for input in data['inputs']:
+          if re.match(regex, input['title']) is not None:
+             input_id['input_id'] = input['id']
+          # else:
+          #     input_id = {}
+
+    # input_id = json.dumps(input_id)
+
+    return info['status'], info['msg'], input_id
+
+def create_extractors(module, url, headers, method, name, conf):
+    try:
+        input_status, input_msg, input_id = get_input_id(module, url, headers)
+    except Exception as e:
+        module.fail_json(msg="Unknown error: %s" % ("Status: , Message: " + str(e) + " greska2: "))
+
+    extractor_url = url + input_id['input_id'] + "/extractors"
+
+    if conf.get('cursor_strategy') != None:
+        cursor_strategy = conf['cursor_strategy']
+    else:
+        cursor_strategy = 'copy'
+
+
+
+    configuration = {}
+
+    if conf['type'] == 'regex':
+        for key in ['regex_value']:
+            if conf[key] is not None:
+                configuration[key] = conf[key]
+    elif conf['type'] == 'json':
+        for key in ['list_separator', 'kv_separator', 'key_prefix', 'key_separator', 'replace_key_whitespace',
+                     'key_whitespace_replacement']:
+            if conf[key] is not None:
+                configuration[key] = conf[key]
+    elif conf['type'] == 'split_and_index':
+        for key in ['split_by', 'index']:
+            if conf[key] is not None:
+                configuration[key] = conf[key]
+    else:
+        module.fail_json(msg="Error: %s" % (conf['type'] + " is not supported extractor type"))
+
+
+
+    payload = {}
+    payload['title'] = name
+    payload['cut_or_copy'] = cursor_strategy
+    payload['source_field'] = conf['source_field']
+    if conf.get('target_field') != None:
+        payload['target_field'] = conf['target_field']
+    else:
+        payload['target_field'] = 'none'
+    payload['extractor_type'] = conf['type']
+    payload['extractor_config'] = configuration
+    payload['converters'] = {}
+    payload['cut_or_copy'] = cursor_strategy
+    if conf.get('order') != None:
+        payload['order'] = conf['order']
+    payload['condition_type'] = "none"
+    payload['condition_value'] = ""
+
+    try:
+        response, info = fetch_url(module=module, url=extractor_url, headers=json.loads(headers), method=method, data=module.jsonify(payload))
+    except Exception as e:
+        module.fail_json(msg="Unknown error: %s" % ("Status: , Message: " + str(e)))
+
+    if info['status'] != 201:
+        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body']) + ", URL: " + extractor_url))
+
+    try:
+        content = to_text(response.read(), errors='surrogate_or_strict')
+    except AttributeError:
+        content = info.pop('body', '')
+
+    return info['status'], info['msg'], content, url
 
 
 def create_input(module, inputs_url, headers):
@@ -389,7 +496,14 @@ def create_input(module, inputs_url, headers):
     except AttributeError:
         content = info.pop('body', '')
 
+    for extractor_name, extractor_dict in module.params['extractors'].items():
+        try:
+            status, msg, content_extr, url = create_extractors(module=module, url=url, headers=headers, method=httpMethod, name=extractor_name, conf=extractor_dict)
+        except AttributeError:
+            content_extr = info_extr.pop('body', '')
+
     return info['status'], info['msg'], content, inputs_url
+    # return status, msg, content_extr, url
 
 def list_extractors(module, inputs_url, headers):
     # Example endpoint: http://127.0.0.1:9000/api/system/inputs/60f096d3062742757d8958c0/extractors
@@ -414,21 +528,30 @@ def list_extractors(module, inputs_url, headers):
 
 #TODO: define create_static_fields func
 
-def delete(module, inputs_url, headers):
+def delete_input(module, inputs_url, headers):
 
-    url = inputs_url + "/" + module.params['input_id']
+    status, message, input_id = get_input_id(module, inputs_url, headers)
+    info = {}
+    info = { "status": "", "msg" : "" }
+    content = ""
+    url = ""
 
-    response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
+    if input_id['input_id'] != False:
 
-    if info['status'] != 204:
-        module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body'])))
+        url = inputs_url + input_id['input_id']
 
-    try:
-        content = to_text(response.read(), errors='surrogate_or_strict')
-    except AttributeError:
-        content = info.pop('body', '')
+        response, info = fetch_url(module=module, url=url, headers=json.loads(headers), method='DELETE')
+
+        if info['status'] != 204:
+            module.fail_json(msg="Fail: %s" % ("Status: " + str(info['msg']) + ", Message: " + str(info['body']) + ", URL: " + url))
+
+        try:
+            content = to_text(response.read(), errors='surrogate_or_strict')
+        except AttributeError:
+            content = info.pop('body', '')
 
     return info['status'], info['msg'], content, url
+
 
 
 def get_token(module, endpoint, username, password):
@@ -473,11 +596,11 @@ def main():
             graylog_password=dict(type='str', no_log=True),
             validate_certs=dict(type='bool', required=False, default=True),
             force=dict(type='bool', required=False, default=False),
-            log_format=dict(type='str', required=True,
+            log_format=dict(type='str', required=False, default='gelf',
                                 choices=['gelf', 'syslog', 'cloudtrail', 'cloudwatch']),
-            input_protocol=dict(type='str', required=True,
+            input_protocol=dict(type='str', required=False, default='UDP',
                         choices=[ 'UDP', 'TCP', 'HTTP' ]),
-            title=dict(type='str', required=True ),
+            title=dict(type='str', required=False ),
             input_id=dict(type='str', required=False),
             global_input=dict(type='bool', required=False, default=True),
             node=dict(type='str', required=False),
@@ -504,7 +627,8 @@ def main():
             enable_cors=dict(type='bool', required=False, default=True),
             idle_writer_timeout=dict(type='int', required=False, default=60),
             max_chunk_size=dict(type='int', required=False, default=65536),
-            max_message_size=dict(type='int', required=False, default=2097152)
+            max_message_size=dict(type='int', required=False, default=2097152),
+            extractors=dict(type='dict', required=False)
         )
     )
 
@@ -534,7 +658,7 @@ def main():
     elif action == "list_extractors":
         status, message, content, url = list_extractors(module, inputs_url, headers)
     elif action == "delete":
-        status, message, content, url = create_input(module, inputs_url, headers)
+        status, message, content, url = delete_input(module, inputs_url, headers)
     elif action == "query_inputs":
         status, message, content, url = query_inputs(module, inputs_url, headers)
     else:

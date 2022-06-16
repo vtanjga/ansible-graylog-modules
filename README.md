@@ -59,7 +59,7 @@ The following modules are available with the corresponding actions:
   * update
   * delete
   * test
-* graylog_input
+* graylog_inputs
   * list_inputs
   * delete
   * create_inputs
